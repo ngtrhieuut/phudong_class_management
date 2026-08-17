@@ -20,12 +20,14 @@
     "@neondatabase/auth": "^0.5.0-beta",
     "@neondatabase/serverless": "^1.1.0",
     "@phosphor-icons/react": "^2.1.10",
+    "@types/ws": "^8.18.1",
     "@vercel/blob": "^2.8.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "read-excel-file": "^9.3.10",
+    "ws": "^8.18.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {

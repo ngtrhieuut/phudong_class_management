@@ -1,11 +1,16 @@
-import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-http';
+import { neon, neonConfig, Pool, type NeonQueryFunction } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-serverless';
+import WebSocket from 'ws';
 
 import * as schema from './schema';
 
 type AppSql = NeonQueryFunction<false, false>;
 
+type AppDatabase = ReturnType<typeof createDatabase>;
+
 let client: AppSql | undefined;
+let pool: Pool | undefined;
+let database: AppDatabase | undefined;
 
 function getSqlClient(): AppSql {
   if (client) {
@@ -19,6 +24,36 @@ function getSqlClient(): AppSql {
 
   client = neon(databaseUrl);
   return client;
+}
+
+function getDatabasePool() {
+  if (pool) {
+    return pool;
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required when a database query is executed.');
+  }
+
+  // Vercel production uses Node 24, but local development and CI may use an
+  // older Node runtime without a global WebSocket implementation. The
+  // serverless Pool is required by Drizzle for interactive transactions.
+  neonConfig.webSocketConstructor ??= WebSocket;
+  pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  pool.on('error', (error: unknown) => {
+    console.error('[db] Neon pool error', error instanceof Error ? error.message : error);
+  });
+  return pool;
+}
+
+function createDatabase() {
+  return drizzle(getDatabasePool(), { schema });
+}
+
+function getDatabase() {
+  database ??= createDatabase();
+  return database;
 }
 
 const lazySqlTarget = ((strings: TemplateStringsArray, ...params: unknown[]) =>
@@ -52,6 +87,15 @@ export const sql = new Proxy(lazySqlTarget, {
   },
 }) as AppSql;
 
-export const db = drizzle(sql, { schema });
+// Keep the database lazy so unit tests and public routes can import server
+// modules without requiring DATABASE_URL during module evaluation. Methods
+// are bound to the concrete Drizzle instance so transactions work normally.
+export const db = new Proxy({} as AppDatabase, {
+  get(_target, property) {
+    const target = getDatabase();
+    const value = Reflect.get(target, property, target);
+    return typeof value === 'function' ? value.bind(target) : value;
+  },
+});
 
 export type Database = typeof db;

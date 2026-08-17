@@ -7,12 +7,12 @@ describe("avatar presets", () => {
     expect(avatarPresets).toHaveLength(10);
     expect(avatarPresets.filter((preset) => preset.gender === "male")).toHaveLength(5);
     expect(avatarPresets.filter((preset) => preset.gender === "female")).toHaveLength(5);
-    expect(avatarPresets.every((preset) => preset.url.startsWith("/avatars/") && preset.url.endsWith(".svg"))).toBe(true);
+    expect(avatarPresets.every((preset) => preset.url.startsWith("/avatars/") && preset.url.endsWith(".png"))).toBe(true);
   });
 
   it("rejects remote or unknown avatar URLs", () => {
-    expect(isAvatarPresetUrl("/avatars/male-01.svg")).toBe(true);
+    expect(isAvatarPresetUrl("/avatars/male-01.png")).toBe(true);
     expect(isAvatarPresetUrl("https://example.com/avatar.png")).toBe(false);
-    expect(isAvatarPresetUrl("/avatars/unknown.svg")).toBe(false);
+    expect(isAvatarPresetUrl("/avatars/unknown.png")).toBe(false);
   });
 });

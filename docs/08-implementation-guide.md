@@ -124,6 +124,11 @@ src/
 - dùng repository/query functions theo domain;
 - mọi write nhạy cảm phải validate authorization server-side.
 
+Runtime Drizzle dùng `drizzle-orm/neon-serverless` với Neon `Pool` để các
+service có transaction (`score`, `reward`, `import`, `student`, `guardian`)
+được atomic. Không dùng `drizzle-orm/neon-http` cho `db.transaction`, vì HTTP
+driver không hỗ trợ transaction callback.
+
 ## 6. Domain modules
 
 Tách logic theo domain, không đặt business logic trực tiếp trong UI:

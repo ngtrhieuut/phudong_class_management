@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { Check, CaretDown, SpinnerGap } from "@phosphor-icons/react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { avatarPresets, type AvatarGender } from "@/lib/avatar-presets";
 
@@ -19,7 +20,7 @@ export function AvatarImage({
   className?: string;
 }) {
   if (!src) return null;
-  return <Image src={src} alt={alt} width={size} height={size} unoptimized className={`object-cover ${className}`} />;
+  return <Image src={src} alt={alt} width={size} height={size} sizes={`${size}px`} className={`object-cover ${className}`} />;
 }
 
 export function AvatarTemplatePicker({
@@ -40,17 +41,76 @@ export function AvatarTemplatePicker({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
   const selected = avatarPresets.find((preset) => preset.url === value);
   const orderedPresets = [...avatarPresets].sort((left, right) => {
     if (gender && left.gender !== right.gender) return left.gender === gender ? -1 : 1;
     return 0;
   });
 
+  useEffect(() => {
+    if (!open) return;
+
+    function updateMenuPosition() {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+
+      const rect = trigger.getBoundingClientRect();
+      const edge = 16;
+      const gap = 12;
+      const width = Math.min(352, Math.max(220, window.innerWidth - edge * 2));
+      const height = menuRef.current?.getBoundingClientRect().height ?? 280;
+      const fitsBelow = rect.bottom + gap + height <= window.innerHeight - edge;
+      const top = fitsBelow ? rect.bottom + gap : Math.max(edge, rect.top - gap - height);
+      const left = Math.min(Math.max(edge, rect.left), Math.max(edge, window.innerWidth - width - edge));
+
+      setMenuPosition({ top, left, width });
+    }
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+        setMenuPosition(null);
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuPosition(null);
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
   async function selectAvatar(url: string) {
     setBusy(true);
     setError(null);
     try {
       await onSelect(url);
+      setMenuPosition(null);
       setOpen(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không thể đổi avatar.");
@@ -59,12 +119,19 @@ export function AvatarTemplatePicker({
     }
   }
 
+  function togglePicker() {
+    setMenuPosition(null);
+    setOpen((current) => !current);
+  }
+
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        ref={triggerRef}
+        onClick={togglePicker}
         aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
         aria-label={label}
         style={{ width: size, height: size }}
         className="group relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1.25rem] bg-[var(--primary-fixed)] text-[var(--primary)] transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] active:scale-95"
@@ -72,12 +139,23 @@ export function AvatarTemplatePicker({
         {selected ? <AvatarImage src={selected.url} alt={selected.label} size={size} className="h-full w-full rounded-[1.25rem]" /> : fallback ?? <span className="font-heading text-[10px] font-bold">Đổi ảnh</span>}
         <span className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[var(--primary)] shadow-sm transition group-hover:scale-110"><CaretDown size={12} weight="bold" /></span>
       </button>
-      {open ? (
-        <div className="absolute left-0 top-[calc(100%+0.75rem)] z-50 w-[min(22rem,calc(100vw-2rem))] rounded-3xl border border-[var(--surface-high)] bg-[var(--surface-lowest)] p-4 text-left shadow-2xl shadow-blue-900/15">
+      {open && typeof document !== "undefined" ? createPortal(
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="dialog"
+          aria-label="Chọn avatar"
+          style={{
+            top: menuPosition?.top ?? -10000,
+            left: menuPosition?.left ?? -10000,
+            width: menuPosition?.width ?? 352,
+          }}
+          className={`fixed z-50 max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-3xl border border-[var(--surface-high)] bg-[var(--surface-lowest)] p-4 text-left shadow-2xl shadow-blue-900/15 transition-opacity ${menuPosition ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        >
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-heading text-sm font-bold text-[var(--on-surface)]">Chọn avatar</p>
-              <p className="mt-1 font-body text-xs text-[var(--on-surface-variant)]">5 mẫu nam và 5 mẫu nữ, hiển thị dạng icon.</p>
+              <p className="mt-1 font-body text-xs text-[var(--on-surface-variant)]">5 mẫu nam và 5 mẫu nữ từ thư viện ảnh của lớp.</p>
             </div>
             {busy ? <SpinnerGap size={18} className="animate-spin text-[var(--primary)]" /> : null}
           </div>
@@ -97,7 +175,8 @@ export function AvatarTemplatePicker({
             ))}
           </div>
           {error ? <p role="alert" className="mt-3 rounded-xl bg-[var(--needs-improvement-soft)] px-3 py-2 font-body text-xs text-[var(--needs-improvement)]">{error}</p> : null}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
