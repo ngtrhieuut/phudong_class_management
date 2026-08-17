@@ -2,7 +2,9 @@ import Link from "next/link";
 import { ArrowLeft, ChartLineUp, CheckCircle, Gift, Notebook, Star, TrendUp, Trophy, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { BadgeAwardForm } from "@/components/dashboard/badge-award-form";
 import { ScoreAdjustmentForm } from "@/components/dashboard/score-adjustment-form";
+import { StudentEditForm } from "@/components/dashboard/student-edit-form";
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { requireUserSession } from "@/lib/auth/server";
 import { getTeacherClasses, getTeacherStudentProfile } from "@/lib/classroom/queries";
@@ -28,7 +30,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     return <AppShell active="Học sinh" classOptions={classOptions} classSwitcherPath="/teacher/students" teacherName={appUser.displayName}><div className="mx-auto max-w-3xl px-5 py-16 text-center"><Link href="/teacher/students" className="font-heading text-sm font-bold text-[var(--primary)] hover:underline">Quay lại danh sách</Link><h1 className="mt-5 font-heading text-3xl font-bold text-[var(--primary)]">Không tìm thấy học sinh</h1><p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">Học sinh không thuộc lớp bạn được phân công hoặc đã không còn hoạt động.</p></div></AppShell>;
   }
 
-  const { profile, scores, badges, levels, weeklyTrend, monthlyTrend, behaviorBreakdown } = studentData;
+  const { profile, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown } = studentData;
   const level = [...levels].sort((a, b) => a.sortOrder - b.sortOrder).find((item) => Number(profile.lifetimeScore) >= item.minScore && (item.maxScore === null || Number(profile.lifetimeScore) <= item.maxScore));
   const weekly = weeklyTrend.map((item) => ({ ...item, total: Number(item.total), events: Number(item.events) }));
   const monthly = monthlyTrend.map((item) => ({ ...item, total: Number(item.total), events: Number(item.events) }));
@@ -74,6 +76,28 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="flex items-center gap-2 font-heading text-xl font-bold text-[var(--on-surface)]"><Notebook size={21} className="text-[var(--primary)]" /> Hoạt động gần đây</h2><div className="mt-5 space-y-4">{scores.slice(0, 12).map((item) => <div key={item.id} className="flex gap-3"><span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-[var(--primary)]" /><div><p className="font-body text-sm text-[var(--on-surface)]">{item.reason}</p><p className="mt-1 font-body text-xs text-[var(--on-surface-variant)]">{new Date(item.occurredAt).toLocaleDateString("vi-VN")} · {item.lifetimeDelta > 0 ? `+${item.lifetimeDelta}` : item.spendableDelta} sao</p></div></div>)}{scores.length === 0 ? <p className="font-body text-sm text-[var(--on-surface-variant)]">Chưa có hoạt động.</p> : null}</div></div>
           <div className="rounded-[1.5rem] bg-[var(--surface-low)] p-6"><h2 className="flex items-center gap-2 font-heading text-xl font-bold text-[var(--primary)]"><Trophy size={21} weight="fill" /> Huy hiệu</h2><div className="mt-5 grid grid-cols-2 gap-3">{badges.map((badge) => <div key={badge.id} className="rounded-2xl bg-[var(--surface-lowest)] p-4 text-center shadow-sm"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--secondary-container)] text-[var(--secondary)]"><Star size={24} weight="fill" /></span><p className="mt-2 font-heading text-xs font-bold text-[var(--on-surface)]">{badge.name}</p></div>)}{badges.length === 0 ? <p className="col-span-2 font-body text-sm text-[var(--on-surface-variant)]">Chưa có huy hiệu.</p> : null}</div></div>
         </section>
+        <div className="mt-6">
+          <StudentEditForm
+            classId={studentData.classContext.id}
+            studentId={profile.id}
+            initial={{
+              studentCode: profile.studentCode,
+              fullName: profile.fullName,
+              birthDate: profile.birthDate,
+              gender: profile.gender,
+              seatNo: profile.seatNo,
+              groupName: profile.groupName,
+            }}
+          />
+        </div>
+        <div className="mt-6">
+          <BadgeAwardForm
+            classId={studentData.classContext.id}
+            studentId={profile.id}
+            definitions={badgeOptions}
+            awardedBadgeIds={badges.map((badge) => badge.id)}
+          />
+        </div>
         <div className="mt-6">
           <ScoreAdjustmentForm
             classId={studentData.classContext.id}

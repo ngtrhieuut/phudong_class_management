@@ -7,9 +7,28 @@ import { auditLogs, classes, classMemberships, classStudents, rewardRedemptions,
 
 const writeRoles = ["homeroom_teacher", "teacher"] as const;
 const redemptionSchema = z.object({ rewardId: z.string().uuid(), studentId: z.string().uuid(), classId: z.string().uuid() });
+const transitionSchema = z.object({ status: z.enum(["requested", "approved", "fulfilled", "rejected", "cancelled"]) });
+
+export type RewardRedemptionStatus = "requested" | "approved" | "fulfilled" | "rejected" | "cancelled";
+export type RewardRedemptionTransition = z.infer<typeof transitionSchema>["status"];
+
+const validTransitions: Record<RewardRedemptionStatus, readonly RewardRedemptionTransition[]> = {
+  requested: ["approved", "rejected", "cancelled"],
+  approved: ["fulfilled", "cancelled"],
+  fulfilled: [],
+  rejected: [],
+  cancelled: [],
+};
+
+export function isValidRewardRedemptionTransition(
+  currentStatus: RewardRedemptionStatus,
+  nextStatus: RewardRedemptionTransition,
+) {
+  return validTransitions[currentStatus].includes(nextStatus);
+}
 
 export class RewardServiceError extends Error {
-  constructor(public readonly code: "INVALID_INPUT" | "FORBIDDEN_CLASS_ACCESS" | "STUDENT_NOT_IN_CLASS" | "REWARD_NOT_AVAILABLE" | "INSUFFICIENT_BALANCE", message: string) {
+  constructor(public readonly code: "INVALID_INPUT" | "FORBIDDEN_CLASS_ACCESS" | "STUDENT_NOT_IN_CLASS" | "REWARD_NOT_AVAILABLE" | "INSUFFICIENT_BALANCE" | "NOT_FOUND" | "INVALID_STATUS", message: string) {
     super(message);
     this.name = "RewardServiceError";
   }
@@ -40,5 +59,120 @@ export async function redeemReward(input: unknown, actorUserId: string) {
     await tx.insert(auditLogs).values({ organizationId: access.organizationId, actorUserId, entityType: "reward_redemption", entityId: redemption.id, action: "requested", afterJson: { costStars: reward.costStars, rewardId: reward.id, studentId: parsed.data.studentId } });
     await notifyClassStaff(tx, parsed.data.classId, "reward_redemption_requested");
     return redemption;
+  });
+}
+
+export async function transitionRewardRedemption(redemptionId: string, input: unknown, actorUserId: string) {
+  const parsedId = z.string().uuid().safeParse(redemptionId);
+  const parsed = transitionSchema.safeParse(input);
+  if (!parsedId.success || !parsed.success) throw new RewardServiceError("INVALID_INPUT", "Dữ liệu cập nhật đổi quà không hợp lệ.");
+
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:reward-redemption:${parsedId.data}`}, 0))`);
+
+    const [redemption] = await tx
+      .select({
+        id: rewardRedemptions.id,
+        classId: rewardRedemptions.classId,
+        rewardId: rewardRedemptions.rewardId,
+        rewardName: rewards.name,
+        studentId: rewardRedemptions.studentId,
+        costStars: rewardRedemptions.costStars,
+        status: rewardRedemptions.status,
+        organizationId: classes.organizationId,
+      })
+      .from(rewardRedemptions)
+      .innerJoin(classes, eq(classes.id, rewardRedemptions.classId))
+      .innerJoin(rewards, eq(rewards.id, rewardRedemptions.rewardId))
+      .where(eq(rewardRedemptions.id, parsedId.data))
+      .limit(1);
+    if (!redemption) throw new RewardServiceError("NOT_FOUND", "Không tìm thấy yêu cầu đổi quà.");
+
+    const [access] = await tx
+      .select({ userId: classMemberships.userId })
+      .from(classMemberships)
+      .innerJoin(users, eq(users.id, classMemberships.userId))
+      .where(
+        and(
+          eq(classMemberships.userId, actorUserId),
+          eq(classMemberships.classId, redemption.classId),
+          inArray(classMemberships.role, writeRoles),
+          eq(users.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (!access) throw new RewardServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền xử lý yêu cầu đổi quà của lớp này.");
+
+    if (!isValidRewardRedemptionTransition(redemption.status, parsed.data.status)) {
+      throw new RewardServiceError("INVALID_STATUS", "Yêu cầu đổi quà không ở trạng thái phù hợp để cập nhật.");
+    }
+
+    const transitionedAt = new Date();
+    const updateValues = (() => {
+      switch (parsed.data.status) {
+        case "approved":
+          return { status: "approved" as const, approvedBy: actorUserId, updatedAt: transitionedAt };
+        case "fulfilled":
+          return { status: "fulfilled" as const, fulfilledAt: transitionedAt, updatedAt: transitionedAt };
+        case "rejected":
+          return { status: "rejected" as const, updatedAt: transitionedAt };
+        case "cancelled":
+          return { status: "cancelled" as const, updatedAt: transitionedAt };
+        default:
+          throw new RewardServiceError("INVALID_STATUS", "Yêu cầu đổi quà không ở trạng thái phù hợp để cập nhật.");
+      }
+    })();
+
+    const refundsStars = parsed.data.status === "rejected" || parsed.data.status === "cancelled";
+    if (refundsStars) {
+      const [updatedSnapshot] = await tx
+        .update(studentScoreSnapshots)
+        .set({ spendableStars: sql`${studentScoreSnapshots.spendableStars} + ${redemption.costStars}`, updatedAt: transitionedAt })
+        .where(and(eq(studentScoreSnapshots.classId, redemption.classId), eq(studentScoreSnapshots.studentId, redemption.studentId)))
+        .returning({ id: studentScoreSnapshots.id });
+      if (!updatedSnapshot) throw new RewardServiceError("INVALID_STATUS", "Không thể hoàn sao cho yêu cầu đổi quà này.");
+      await tx.insert(scoreTransactions).values({
+        classId: redemption.classId,
+        studentId: redemption.studentId,
+        actorUserId,
+        transactionType: "reward",
+        lifetimeDelta: 0,
+        spendableDelta: redemption.costStars,
+        reason: `Hoàn sao đổi quà: ${redemption.rewardName}`,
+        occurredAt: transitionedAt,
+      });
+      await tx
+        .update(rewards)
+        .set({ stock: sql`${rewards.stock} + 1`, updatedAt: transitionedAt })
+        .where(and(eq(rewards.id, redemption.rewardId), sql`${rewards.stock} is not null`));
+    }
+    const [updatedRedemption] = await tx
+      .update(rewardRedemptions)
+      .set(updateValues)
+      .where(and(eq(rewardRedemptions.id, redemption.id), eq(rewardRedemptions.status, redemption.status)))
+      .returning({ id: rewardRedemptions.id, status: rewardRedemptions.status });
+    if (!updatedRedemption) throw new RewardServiceError("INVALID_STATUS", "Yêu cầu đổi quà vừa được cập nhật bởi thao tác khác.");
+
+    await tx.insert(auditLogs).values({
+      organizationId: redemption.organizationId,
+      actorUserId,
+      entityType: "reward_redemption",
+      entityId: redemption.id,
+      action: parsed.data.status,
+      beforeJson: { status: redemption.status },
+      afterJson: {
+        status: parsed.data.status,
+        costStars: redemption.costStars,
+        rewardId: redemption.rewardId,
+        studentId: redemption.studentId,
+        refundedStars: refundsStars ? redemption.costStars : 0,
+      },
+    });
+
+    return {
+      id: updatedRedemption.id,
+      previousStatus: redemption.status,
+      status: updatedRedemption.status,
+    };
   });
 }

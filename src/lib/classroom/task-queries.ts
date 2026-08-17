@@ -1,7 +1,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { rewards, students, taskAssignments, tasks } from "@/db/schema";
+import { rewardRedemptions, rewards, students, taskAssignments, tasks } from "@/db/schema";
 import { getTeacherClass } from "@/lib/classroom/queries";
 
 export async function getTeacherTaskBoard(userId: string, classId?: string) {
@@ -17,6 +17,25 @@ export async function getTeacherTaskBoard(userId: string, classId?: string) {
 export async function getTeacherRewardBoard(userId: string, classId?: string) {
   const classContext = await getTeacherClass(userId, classId);
   if (!classContext) return null;
-  const rewardRows = await db.select({ id: rewards.id, name: rewards.name, description: rewards.description, rewardType: rewards.rewardType, costStars: rewards.costStars, stock: rewards.stock, active: rewards.active }).from(rewards).where(eq(rewards.classId, classContext.id)).orderBy(asc(rewards.costStars), asc(rewards.name));
-  return { classContext, rewards: rewardRows };
+  const [rewardRows, redemptionRows] = await Promise.all([
+    db.select({ id: rewards.id, name: rewards.name, description: rewards.description, rewardType: rewards.rewardType, costStars: rewards.costStars, stock: rewards.stock, active: rewards.active }).from(rewards).where(eq(rewards.classId, classContext.id)).orderBy(asc(rewards.costStars), asc(rewards.name)),
+    db
+      .select({
+        id: rewardRedemptions.id,
+        studentId: rewardRedemptions.studentId,
+        studentName: students.fullName,
+        rewardName: rewards.name,
+        costStars: rewardRedemptions.costStars,
+        status: rewardRedemptions.status,
+        requestedAt: rewardRedemptions.requestedAt,
+        fulfilledAt: rewardRedemptions.fulfilledAt,
+      })
+      .from(rewardRedemptions)
+      .innerJoin(students, eq(students.id, rewardRedemptions.studentId))
+      .innerJoin(rewards, eq(rewards.id, rewardRedemptions.rewardId))
+      .where(eq(rewardRedemptions.classId, classContext.id))
+      .orderBy(desc(rewardRedemptions.requestedAt))
+      .limit(100),
+  ]);
+  return { classContext, rewards: rewardRows, redemptions: redemptionRows };
 }

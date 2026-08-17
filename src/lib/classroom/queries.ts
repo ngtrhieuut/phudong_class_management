@@ -287,7 +287,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
     schoolYearName: profile.schoolYearName,
   };
 
-  const [scores, badges, levels, weeklyTrend, monthlyTrend, behaviorBreakdown] = await Promise.all([
+  const [scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown] = await Promise.all([
     db
       .select({
         id: scoreTransactions.id,
@@ -323,6 +323,20 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
       )
       .orderBy(desc(studentBadges.awardedAt))
       .limit(20),
+    db
+      .select({
+        id: badgeDefinitions.id,
+        name: badgeDefinitions.name,
+        description: badgeDefinitions.description,
+      })
+      .from(badgeDefinitions)
+      .where(
+        and(
+          eq(badgeDefinitions.active, true),
+          or(eq(badgeDefinitions.classId, profile.classId), isNull(badgeDefinitions.classId)),
+        ),
+      )
+      .orderBy(asc(badgeDefinitions.name)),
     db
       .select({
         id: levelDefinitions.id,
@@ -381,7 +395,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
       .limit(20),
   ]);
 
-  return { classContext, profile, scores, badges, levels, weeklyTrend, monthlyTrend, behaviorBreakdown };
+  return { classContext, profile, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown };
 }
 
 export async function getTeacherDashboardData(
