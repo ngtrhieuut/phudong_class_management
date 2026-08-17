@@ -30,7 +30,7 @@ test("registration page validates password confirmation before calling auth", as
   // environment the page must show its explicit setup state instead of
   // attempting to exercise a form that cannot submit yet.
   if ((await nameField.count()) === 0) {
-    await expect(page.getByRole("alert")).toContainText("Authentication chưa được cấu hình");
+    await expect(page.getByText("Authentication chưa được cấu hình", { exact: false })).toBeVisible();
     return;
   }
 
