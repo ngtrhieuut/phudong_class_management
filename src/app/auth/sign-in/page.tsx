@@ -2,7 +2,14 @@ import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Star } from "@phosphor-icons/react/dist/ssr";
 import { SignInForm } from "./sign-in-form";
 
-export default function SignInPage() {
+function safeCallbackPath(value: string | undefined) {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/teacher/dashboard";
+}
+
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const params = await searchParams;
+  const callbackPath = safeCallbackPath(params.next);
+
   return (
     <main className="min-h-[100dvh] bg-[var(--surface)] px-5 py-8 sm:px-8">
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-6xl items-center justify-center">
@@ -48,7 +55,7 @@ export default function SignInPage() {
                 Đăng nhập để mở dashboard lớp học của bạn.
               </p>
             </div>
-            <SignInForm />
+            <SignInForm callbackPath={callbackPath} />
             <p className="mt-8 text-center font-body text-xs leading-5 text-[var(--on-surface-variant)]">
               Authentication đang dùng Managed Better Auth của Neon. Tài khoản và session không nằm trong client database.
             </p>

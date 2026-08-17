@@ -45,7 +45,9 @@ npm run test:e2e
 
 Các route teacher và parent đều dùng server-side session guard; dữ liệu lớp/học sinh được đọc qua Drizzle và Neon, không dùng fixture khi chạy production. Teacher có thể đổi lớp bằng `classId`, nhập danh sách `.xlsx/.csv`, xuất CSV, ghi nhận điểm có `Idempotency-Key`, tạo nhiệm vụ, đổi quà, đăng tuyên dương và quản lý liên kết phụ huynh theo từng học sinh. Parent chỉ đọc được học sinh có quan hệ guardian hợp lệ.
 
-Liên kết guardian trong MVP dùng mô hình account-first: phụ huynh cần đăng nhập ít nhất một lần để có app user active, sau đó giáo viên nhập đúng email để liên kết; thu hồi sẽ tắt quyền xem và nhận thông báo nhưng vẫn giữ audit log.
+Liên kết guardian hỗ trợ hai cách: liên kết ngay với account đã đăng nhập, hoặc tạo invitation token một lần có hạn dùng; phụ huynh phải đăng nhập đúng email nhận lời mời trước khi xác nhận. Thu hồi sẽ tắt quyền xem và nhận thông báo nhưng vẫn giữ audit log.
+
+Ảnh/video tuyên dương dùng private Vercel Blob, client upload trực tiếp để không đi qua giới hạn body của Vercel Function; DB chỉ lưu metadata và URL private. Nếu chưa tạo Blob store, chức năng text/parent vẫn hoạt động và upload sẽ fail-closed với thông báo cấu hình storage.
 
 ## Database và deployment
 

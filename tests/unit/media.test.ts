@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  PRAISE_MEDIA_MAX_BYTES,
+  parsePraiseMediaUploadPayload,
+  validatePraiseMediaContent,
+  validatePraiseMediaPathname,
+} from '../../src/lib/media/praise-media';
+
+const validPayload = JSON.stringify({
+  actorUserId: '11111111-1111-4111-8111-111111111111',
+  organizationId: '22222222-2222-4222-8222-222222222222',
+  classId: '33333333-3333-4333-8333-333333333333',
+  postId: '44444444-4444-4444-8444-444444444444',
+});
+
+describe('praise media validation', () => {
+  it('parses the signed upload payload and rejects malformed JSON', () => {
+    expect(parsePraiseMediaUploadPayload(validPayload)).toMatchObject({
+      classId: '33333333-3333-4333-8333-333333333333',
+      postId: '44444444-4444-4444-8444-444444444444',
+    });
+
+    expect(() => parsePraiseMediaUploadPayload('{not-json')).toThrow('Thông tin upload không hợp lệ.');
+    expect(() => parsePraiseMediaUploadPayload(null)).toThrow('Thông tin upload không hợp lệ.');
+  });
+
+  it('accepts safe pathnames and rejects traversal/control characters', () => {
+    expect(validatePraiseMediaPathname('praise/2026/photo.webp')).toBe('praise/2026/photo.webp');
+    expect(() => validatePraiseMediaPathname('../private.txt')).toThrow('Tên file không hợp lệ.');
+    expect(() => validatePraiseMediaPathname('praise\\photo.webp')).toThrow('Tên file không hợp lệ.');
+    expect(() => validatePraiseMediaPathname('praise/\u0000photo.webp')).toThrow('Tên file không hợp lệ.');
+  });
+
+  it('enforces the allowlist and 50 MB size limit', () => {
+    expect(validatePraiseMediaContent('image/webp', 1024)).toBeUndefined();
+    expect(validatePraiseMediaContent('video/mp4', PRAISE_MEDIA_MAX_BYTES)).toBeUndefined();
+    expect(() => validatePraiseMediaContent('image/svg+xml', 1024)).toThrow(
+      'File phải là ảnh/video được hỗ trợ và không quá 50 MB.',
+    );
+    expect(() => validatePraiseMediaContent('image/jpeg', PRAISE_MEDIA_MAX_BYTES + 1)).toThrow(
+      'File phải là ảnh/video được hỗ trợ và không quá 50 MB.',
+    );
+  });
+});

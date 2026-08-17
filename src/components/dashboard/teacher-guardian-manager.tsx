@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { LinkSimple, ShieldCheck, UserMinus, UserPlus, UsersThree } from "@phosphor-icons/react";
+import { Copy, LinkSimple, ShieldCheck, UserMinus, UserPlus, UsersThree } from "@phosphor-icons/react";
 
 type Student = { id: string; fullName: string; studentCode: string };
 type GuardianRelation = {
@@ -32,6 +32,7 @@ export function TeacherGuardianManager({
   const [relations, setRelations] = useState(initialRelations);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const relationByStudent = useMemo(() => {
     const grouped = new Map<string, GuardianRelation[]>();
@@ -55,12 +56,48 @@ export function TeacherGuardianManager({
       const payload = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error || "Không thể liên kết phụ huynh.");
       setGuardianEmail("");
+      setInviteUrl(null);
       setMessage("Đã liên kết phụ huynh. Danh sách sẽ được cập nhật.");
       window.location.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Không thể liên kết phụ huynh.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createInvite() {
+    if (!studentId || !guardianEmail.trim() || !relationship.trim()) {
+      setMessage("Chọn học sinh và nhập email, mối quan hệ của phụ huynh.");
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    setInviteUrl(null);
+    try {
+      const response = await fetch("/api/teacher/guardians/invitations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ classId, studentId, guardianEmail, relationship, canView: true, receivesNotifications: true, expiresInHours: 72 }),
+      });
+      const payload = await response.json().catch(() => null) as { data?: { inviteUrl?: string }; error?: string } | null;
+      if (!response.ok || !payload?.data?.inviteUrl) throw new Error(payload?.error || "Không thể tạo lời mời phụ huynh.");
+      setInviteUrl(payload.data.inviteUrl);
+      setMessage("Đã tạo lời mời. Hãy gửi liên kết này đúng cho phụ huynh.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Không thể tạo lời mời phụ huynh.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyInvite() {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setMessage("Đã sao chép liên kết lời mời.");
+    } catch {
+      setMessage("Không thể sao chép tự động. Hãy chọn và sao chép liên kết thủ công.");
     }
   }
 
@@ -92,7 +129,7 @@ export function TeacherGuardianManager({
           <UserPlus size={24} className="text-[var(--primary)]" weight="fill" />
           <h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Thêm liên kết</h2>
         </div>
-        <p className="mt-2 font-body text-sm leading-6 text-[var(--on-surface-variant)]">Nhập email tài khoản phụ huynh đã đăng nhập vào Phù Đổng ít nhất một lần.</p>
+        <p className="mt-2 font-body text-sm leading-6 text-[var(--on-surface-variant)]">Có thể liên kết ngay với tài khoản đã đăng nhập, hoặc tạo link mời một lần có hạn dùng cho phụ huynh.</p>
         {students.length > 0 ? (
           <>
             <label className="mt-5 block">
@@ -110,7 +147,10 @@ export function TeacherGuardianManager({
               <input list="guardian-relationships" value={relationship} onChange={(event) => setRelationship(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border-2 border-transparent bg-[var(--surface-low)] px-4 font-body outline-none focus:border-[var(--primary-fixed)]" placeholder="Ví dụ: Mẹ" />
               <datalist id="guardian-relationships">{relationshipOptions.map((option) => <option key={option} value={option} />)}</datalist>
             </label>
-            <button type="button" disabled={busy} onClick={() => void link()} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-5 font-heading text-sm font-bold text-white disabled:opacity-50"><LinkSimple size={19} weight="bold" /> {busy ? "Đang lưu..." : "Liên kết phụ huynh"}</button>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button type="button" disabled={busy} onClick={() => void link()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-4 font-heading text-sm font-bold text-white disabled:opacity-50"><LinkSimple size={19} weight="bold" /> Liên kết ngay</button>
+              <button type="button" disabled={busy} onClick={() => void createInvite()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--secondary-container)] px-4 font-heading text-sm font-bold text-[var(--secondary)] disabled:opacity-50"><UserPlus size={19} weight="bold" /> Tạo link mời</button>
+            </div>
           </>
         ) : (
           <div className="mt-5 rounded-2xl bg-[var(--surface-low)] p-4 font-body text-sm text-[var(--on-surface-variant)]">Chưa có học sinh đang hoạt động trong lớp.</div>
@@ -119,6 +159,16 @@ export function TeacherGuardianManager({
           <ShieldCheck size={22} className="mt-0.5 shrink-0 text-[var(--primary)]" weight="fill" />
           <p className="font-body text-xs leading-5 text-[var(--on-surface-variant)]">Thu hồi liên kết sẽ tắt cả quyền xem dữ liệu và thông báo. Hệ thống vẫn giữ audit log để truy vết.</p>
         </div>
+        {inviteUrl ? (
+          <div className="mt-5 rounded-2xl border border-[var(--primary-fixed)] bg-[var(--surface-low)] p-4">
+            <p className="font-heading text-xs font-bold text-[var(--primary)]">Link mời có hiệu lực trong 72 giờ</p>
+            <div className="mt-2 flex items-start gap-2">
+              <input readOnly value={inviteUrl} aria-label="Link mời phụ huynh" className="min-h-10 min-w-0 flex-1 rounded-xl bg-[var(--surface-lowest)] px-3 font-body text-xs text-[var(--on-surface)]" />
+              <button type="button" onClick={() => void copyInvite()} aria-label="Sao chép link mời" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-white"><Copy size={18} /></button>
+            </div>
+            <p className="mt-2 font-body text-xs leading-5 text-[var(--on-surface-variant)]">Chỉ gửi link cho đúng phụ huynh. Token chỉ dùng được một lần.</p>
+          </div>
+        ) : null}
         {message ? <p role="status" className="mt-4 font-body text-sm text-[var(--on-surface-variant)]">{message}</p> : null}
       </section>
 

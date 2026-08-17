@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   classes,
   classStudents,
+  mediaAssets,
   praisePostStudents,
   praisePosts,
   students,
@@ -24,10 +25,12 @@ export async function getTeacherPraiseFeed(userId: string, classId?: string) {
       createdAt: praisePosts.createdAt,
       updatedAt: praisePosts.updatedAt,
       studentNames: sql<string>`coalesce(string_agg(distinct ${students.fullName}, ', '), 'Lớp học')`,
+      media: sql<Array<{ id: string; mimeType: string }>>`coalesce(jsonb_agg(distinct jsonb_build_object('id', ${mediaAssets.id}, 'mimeType', ${mediaAssets.mimeType})) filter (where ${mediaAssets.id} is not null), '[]'::jsonb)`,
     })
     .from(praisePosts)
     .leftJoin(praisePostStudents, eq(praisePostStudents.postId, praisePosts.id))
     .leftJoin(students, eq(students.id, praisePostStudents.studentId))
+    .leftJoin(mediaAssets, and(eq(mediaAssets.ownerType, "praise_post"), eq(mediaAssets.ownerId, praisePosts.id)))
     .where(eq(praisePosts.classId, classContext.id))
     .groupBy(praisePosts.id)
     .orderBy(desc(praisePosts.createdAt));
@@ -45,6 +48,7 @@ export async function getParentPraisePosts(childStudentId: string) {
       visibility: praisePosts.visibility,
       createdAt: praisePosts.createdAt,
       studentNames: sql<string>`coalesce(string_agg(distinct ${students.fullName}, ', '), 'Lớp học')`,
+      media: sql<Array<{ id: string; mimeType: string }>>`coalesce(jsonb_agg(distinct jsonb_build_object('id', ${mediaAssets.id}, 'mimeType', ${mediaAssets.mimeType})) filter (where ${mediaAssets.id} is not null), '[]'::jsonb)`,
     })
     .from(classStudents)
     .innerJoin(classes, eq(classes.id, classStudents.classId))
@@ -57,6 +61,7 @@ export async function getParentPraisePosts(childStudentId: string) {
       ),
     )
     .leftJoin(students, eq(students.id, praisePostStudents.studentId))
+    .leftJoin(mediaAssets, and(eq(mediaAssets.ownerType, "praise_post"), eq(mediaAssets.ownerId, praisePosts.id)))
     .where(
       and(
         eq(classStudents.studentId, childStudentId),

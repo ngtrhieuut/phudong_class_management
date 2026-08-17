@@ -339,6 +339,61 @@ export const studentGuardians = pgTable(
   ],
 );
 
+export const guardianInvitationStatusEnum = pgEnum('guardian_invitation_status', [
+  'pending',
+  'accepted',
+  'expired',
+  'revoked',
+]);
+
+export const guardianInvitations = pgTable(
+  'guardian_invitations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'restrict' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'restrict' }),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    acceptedByUserId: uuid('accepted_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    guardianEmail: text('guardian_email').notNull(),
+    relationship: text('relationship').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    status: guardianInvitationStatusEnum('status').notNull().default('pending'),
+    canView: boolean('can_view').notNull().default(true),
+    receivesNotifications: boolean('receives_notifications').notNull().default(true),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('guardian_invitations_token_hash_key').on(table.tokenHash),
+    index('guardian_invitations_class_student_status_idx').on(table.classId, table.studentId, table.status),
+    index('guardian_invitations_organization_created_idx').on(table.organizationId, table.createdAt.desc()),
+    index('guardian_invitations_email_status_idx').on(table.guardianEmail, table.status),
+    foreignKey({
+      columns: [table.classId, table.studentId],
+      foreignColumns: [classStudents.classId, classStudents.studentId],
+      name: 'guardian_invitations_class_student_fk',
+    }).onDelete('restrict'),
+    check('guardian_invitations_email_not_blank', sql`length(trim(${table.guardianEmail})) > 0`),
+    check('guardian_invitations_relationship_not_blank', sql`length(trim(${table.relationship})) > 0`),
+    check('guardian_invitations_token_hash_not_blank', sql`length(trim(${table.tokenHash})) > 0`),
+    check('guardian_invitations_expiry_check', sql`${table.expiresAt} > ${table.createdAt}`),
+  ],
+);
+
 export const behaviorTemplates = pgTable(
   'behavior_templates',
   {

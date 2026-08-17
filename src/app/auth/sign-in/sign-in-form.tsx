@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeSlash, SpinnerGap } from "@phosphor-icons/react";
 import { authClient } from "@/lib/auth/client";
 
-export function SignInForm() {
+export function SignInForm({ callbackPath = "/teacher/dashboard" }: { callbackPath?: string }) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,7 +24,7 @@ export function SignInForm() {
       const result = await authClient.signIn.email({
         email,
         password,
-        callbackURL: "/teacher/dashboard",
+        callbackURL: callbackPath,
       });
 
       if (result.error) {
@@ -32,7 +32,7 @@ export function SignInForm() {
         return;
       }
 
-      router.push("/teacher/dashboard");
+      router.push(callbackPath);
       router.refresh();
     } catch {
       setError("Không thể kết nối dịch vụ xác thực. Kiểm tra cấu hình Neon Auth.");
