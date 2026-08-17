@@ -20,6 +20,7 @@ import {
   levelDefinitions,
   praisePosts,
   praisePostStudents,
+  rewardRedemptions,
   schoolYears,
   scoreTransactions,
   studentGuardians,
@@ -479,7 +480,7 @@ export async function getClassAnalytics(userId: string, classId: string) {
     throw new Error("FORBIDDEN_CLASS_ACCESS");
   }
 
-  const [totals, behaviorBreakdown, dailyScores] = await Promise.all([
+  const [totals, behaviorBreakdown, dailyScores, taskStats, badgeStats, rewardStats] = await Promise.all([
     db
       .select({
         studentCount: sql<number>`count(distinct ${classStudents.studentId})`,
@@ -518,9 +519,33 @@ export async function getClassAnalytics(userId: string, classId: string) {
       )
       .groupBy(sql`date_trunc('day', ${scoreTransactions.occurredAt})`)
       .orderBy(asc(sql`date_trunc('day', ${scoreTransactions.occurredAt})`)),
+    db
+      .select({
+        totalAssignments: sql<number>`count(${taskAssignments.id})`,
+        completedAssignments: sql<number>`count(${taskAssignments.id}) filter (where ${taskAssignments.status} = 'completed')`,
+      })
+      .from(tasks)
+      .leftJoin(taskAssignments, eq(taskAssignments.taskId, tasks.id))
+      .where(eq(tasks.classId, classId)),
+    db
+      .select({ total: sql<number>`count(${studentBadges.id})` })
+      .from(studentBadges)
+      .where(eq(studentBadges.classId, classId)),
+    db
+      .select({ total: sql<number>`count(${rewardRedemptions.id})` })
+      .from(rewardRedemptions)
+      .where(eq(rewardRedemptions.classId, classId)),
   ]);
 
-  return { classContext, totals: totals[0] ?? null, behaviorBreakdown, dailyScores };
+  return {
+    classContext,
+    totals: totals[0] ?? null,
+    behaviorBreakdown,
+    dailyScores,
+    taskStats: taskStats[0] ?? { totalAssignments: 0, completedAssignments: 0 },
+    badgesEarned: badgeStats[0]?.total ?? 0,
+    rewardRedemptions: rewardStats[0]?.total ?? 0,
+  };
 }
 
 export async function getClassConfiguration(userId: string, classId: string) {

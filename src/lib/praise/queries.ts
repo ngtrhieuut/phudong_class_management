@@ -35,7 +35,7 @@ export async function getTeacherPraiseFeed(userId: string, classId?: string) {
   return { classContext, posts };
 }
 
-export async function getParentPraisePosts(studentId: string) {
+export async function getParentPraisePosts(childStudentId: string) {
   return db
     .select({
       id: praisePosts.id,
@@ -49,15 +49,21 @@ export async function getParentPraisePosts(studentId: string) {
     .from(classStudents)
     .innerJoin(classes, eq(classes.id, classStudents.classId))
     .innerJoin(praisePosts, eq(praisePosts.classId, classStudents.classId))
-    .leftJoin(praisePostStudents, eq(praisePostStudents.postId, praisePosts.id))
+    .leftJoin(
+      praisePostStudents,
+      and(
+        eq(praisePostStudents.postId, praisePosts.id),
+        eq(praisePostStudents.studentId, childStudentId),
+      ),
+    )
     .leftJoin(students, eq(students.id, praisePostStudents.studentId))
     .where(
       and(
-        eq(classStudents.studentId, studentId),
+        eq(classStudents.studentId, childStudentId),
         isNull(classStudents.leftAt),
         or(
           eq(praisePosts.visibility, "class"),
-          and(eq(praisePosts.visibility, "related_guardians"), eq(praisePostStudents.studentId, studentId)),
+          and(eq(praisePosts.visibility, "related_guardians"), eq(praisePostStudents.studentId, childStudentId)),
         ),
       ),
     )
