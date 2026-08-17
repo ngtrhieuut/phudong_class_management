@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -173,7 +173,7 @@ export async function acceptGuardianInvitation(
   const tokenHash = hashToken(parsed.data.token);
   const now = new Date();
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [invitation] = await tx
       .select({
         id: guardianInvitations.id,
@@ -200,11 +200,39 @@ export async function acceptGuardianInvitation(
     }
 
     if (invitation.expiresAt <= now) {
-      await tx
+      const [expiredInvitation] = await tx
         .update(guardianInvitations)
         .set({ status: "expired", updatedAt: now })
-        .where(eq(guardianInvitations.id, invitation.id));
-      throw new GuardianInvitationError("INVITATION_NOT_VALID", "Lời mời phụ huynh đã hết hạn.");
+        .where(and(eq(guardianInvitations.id, invitation.id), eq(guardianInvitations.status, "pending")))
+        .returning({ id: guardianInvitations.id });
+      if (!expiredInvitation) {
+        throw new GuardianInvitationError("INVITATION_NOT_VALID", "Lời mời không hợp lệ hoặc đã được sử dụng.");
+      }
+      await tx.insert(auditLogs).values({
+        organizationId: invitation.organizationId,
+        actorUserId: actor.userId,
+        entityType: "guardian_invitation",
+        entityId: invitation.id,
+        action: "expired",
+        afterJson: { studentId: invitation.studentId },
+      });
+      return { expired: true as const };
+    }
+
+    const [claimedInvitation] = await tx
+      .update(guardianInvitations)
+      .set({ status: "accepted", acceptedByUserId: actor.userId, acceptedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(guardianInvitations.id, invitation.id),
+          eq(guardianInvitations.status, "pending"),
+          eq(guardianInvitations.guardianEmail, normalizedEmail),
+          gt(guardianInvitations.expiresAt, now),
+        ),
+      )
+      .returning({ id: guardianInvitations.id });
+    if (!claimedInvitation) {
+      throw new GuardianInvitationError("INVITATION_NOT_VALID", "Lời mời không hợp lệ hoặc đã được sử dụng.");
     }
 
     const [existingGuardian] = await tx
@@ -254,11 +282,6 @@ export async function acceptGuardianInvitation(
       });
     }
 
-    await tx
-      .update(guardianInvitations)
-      .set({ status: "accepted", acceptedByUserId: actor.userId, acceptedAt: now, updatedAt: now })
-      .where(and(eq(guardianInvitations.id, invitation.id), eq(guardianInvitations.status, "pending")));
-
     await tx.insert(auditLogs).values([
       {
         organizationId: invitation.organizationId,
@@ -291,4 +314,9 @@ export async function acceptGuardianInvitation(
       linked: true,
     };
   });
+
+  if ("expired" in result && result.expired) {
+    throw new GuardianInvitationError("INVITATION_NOT_VALID", "Lời mời phụ huynh đã hết hạn.");
+  }
+  return result;
 }

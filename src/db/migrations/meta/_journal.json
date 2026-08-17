@@ -15,6 +15,13 @@
       "when": 1786954491787,
       "tag": "0001_clammy_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786956728126,
+      "tag": "0002_gigantic_white_tiger",
+      "breakpoints": true
     }
   ]
 }

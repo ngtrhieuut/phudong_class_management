@@ -55,6 +55,7 @@ export function TeacherPraisePanel({ classId, students, initialPosts }: { classI
     setBusy(true);
     setMessage(null);
     setUploadProgress(null);
+    let createdPostId: string | null = null;
     try {
       const response = await fetch("/api/teacher/praise", {
         method: "POST",
@@ -63,6 +64,7 @@ export function TeacherPraisePanel({ classId, students, initialPosts }: { classI
       });
       const payload = await response.json().catch(() => null) as { error?: string; data?: { id?: string } } | null;
       if (!response.ok || !payload?.data?.id) throw new Error(payload?.error || "Không thể đăng bài.");
+      createdPostId = payload.data.id;
 
       if (mediaFile) {
         await upload(mediaFile.name, mediaFile, {
@@ -82,6 +84,18 @@ export function TeacherPraisePanel({ classId, students, initialPosts }: { classI
       setMessage(mediaFile ? "Đã đăng bài và upload media riêng tư." : "Đã đăng bài tuyên dương.");
       window.location.reload();
     } catch (error) {
+      if (createdPostId) {
+        const postId = createdPostId;
+        const createdStudentNames = students.filter((student) => selectedIds.includes(student.id)).map((student) => student.name).join(", ") || "Lớp học";
+        setPosts((current) => [{ id: postId, title: title.trim(), body: body.trim(), visibility, studentNames: createdStudentNames, createdAt: new Date().toISOString(), media: [] }, ...current]);
+        setTitle("");
+        setBody("");
+        setSelectedIds([]);
+        setMediaFile(null);
+        setUploadProgress(null);
+        setMessage("Bài tuyên dương đã được tạo nhưng media chưa upload. Không cần bấm đăng lại để tránh tạo bài trùng.");
+        return;
+      }
       setMessage(error instanceof Error ? error.message : "Không thể đăng bài.");
     } finally {
       setBusy(false);

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "guardian_invitations_pending_key" ON "guardian_invitations" USING btree ("class_id","student_id","guardian_email") WHERE "guardian_invitations"."status" = 'pending';

@@ -7,6 +7,7 @@ import {
   classes,
   classMemberships,
   classStudents,
+  guardianInvitations,
   guardians,
   studentGuardians,
   students,
@@ -190,7 +191,7 @@ export async function revokeGuardian(input: unknown, actorUserId: string) {
     if (!student) throw new GuardianServiceError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc lớp đang chọn.");
 
     const [relation] = await tx
-      .select({ id: studentGuardians.id })
+      .select({ id: studentGuardians.id, guardianId: studentGuardians.guardianId })
       .from(studentGuardians)
       .where(
         and(
@@ -205,6 +206,42 @@ export async function revokeGuardian(input: unknown, actorUserId: string) {
       .update(studentGuardians)
       .set({ canView: false, receivesNotifications: false, updatedAt: new Date() })
       .where(eq(studentGuardians.id, relation.id));
+
+    const [guardianAccount] = await tx
+      .select({ email: users.email })
+      .from(guardians)
+      .innerJoin(users, eq(users.id, guardians.userId))
+      .where(eq(guardians.id, relation.guardianId))
+      .limit(1);
+    const normalizedGuardianEmail = guardianAccount?.email?.trim().toLowerCase();
+    if (normalizedGuardianEmail) {
+      const revokedInvitations = await tx
+        .update(guardianInvitations)
+        .set({ status: "revoked", revokedAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(guardianInvitations.classId, parsed.data.classId),
+            eq(guardianInvitations.studentId, parsed.data.studentId),
+            eq(guardianInvitations.guardianEmail, normalizedGuardianEmail),
+            eq(guardianInvitations.status, "pending"),
+          ),
+        )
+        .returning({ id: guardianInvitations.id });
+
+      if (revokedInvitations.length > 0) {
+        await tx.insert(auditLogs).values(
+          revokedInvitations.map((invitation) => ({
+            organizationId: access.organizationId,
+            actorUserId,
+            entityType: "guardian_invitation",
+            entityId: invitation.id,
+            action: "revoked",
+            afterJson: { classId: parsed.data.classId, studentId: parsed.data.studentId },
+          })),
+        );
+      }
+    }
+
     await tx.insert(auditLogs).values({
       organizationId: access.organizationId,
       actorUserId,

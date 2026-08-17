@@ -379,6 +379,9 @@ export const guardianInvitations = pgTable(
   },
   (table) => [
     uniqueIndex('guardian_invitations_token_hash_key').on(table.tokenHash),
+    uniqueIndex('guardian_invitations_pending_key')
+      .on(table.classId, table.studentId, table.guardianEmail)
+      .where(sql`${table.status} = 'pending'`),
     index('guardian_invitations_class_student_status_idx').on(table.classId, table.studentId, table.status),
     index('guardian_invitations_organization_created_idx').on(table.organizationId, table.createdAt.desc()),
     index('guardian_invitations_email_status_idx').on(table.guardianEmail, table.status),

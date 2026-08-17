@@ -22,6 +22,7 @@ export const PRAISE_MEDIA_CONTENT_TYPES = ["image/jpeg", "image/png", "image/web
 export const PRAISE_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 
 const teacherRoles = ["homeroom_teacher", "teacher"] as const;
+const mediaWriteRoles = ["homeroom_teacher", "teacher"] as const;
 const uploadPayloadSchema = z.object({
   actorUserId: z.string().uuid(),
   organizationId: z.string().uuid(),
@@ -167,6 +168,23 @@ async function canTeacherViewMedia(userId: string, classId: string) {
   return Boolean(access);
 }
 
+async function canTeacherManageMedia(userId: string, classId: string) {
+  const [access] = await db
+    .select({ id: classMemberships.id })
+    .from(classMemberships)
+    .innerJoin(users, eq(users.id, classMemberships.userId))
+    .where(
+      and(
+        eq(classMemberships.userId, userId),
+        eq(classMemberships.classId, classId),
+        inArray(classMemberships.role, mediaWriteRoles),
+        eq(users.status, "active"),
+      ),
+    )
+    .limit(1);
+  return Boolean(access);
+}
+
 async function canAdminViewMedia(userId: string, organizationId: string) {
   const [access] = await db
     .select({ id: organizationMembers.id })
@@ -209,7 +227,7 @@ export async function getAccessiblePraiseMedia(mediaId: string, userId: string) 
 export async function deletePraiseMedia(mediaId: string, userId: string) {
   const target = await getMediaTarget(mediaId);
   if (!target) throw new PraiseMediaError("NOT_FOUND", "Không tìm thấy media.");
-  const canManage = (await canTeacherViewMedia(userId, target.classId)) || (await canAdminViewMedia(userId, target.organizationId));
+  const canManage = (await canTeacherManageMedia(userId, target.classId)) || (await canAdminViewMedia(userId, target.organizationId));
   if (!canManage) throw new PraiseMediaError("FORBIDDEN", "Bạn không có quyền xóa media này.");
 
   try {
