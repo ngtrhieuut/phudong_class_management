@@ -71,13 +71,14 @@ function toDemoStudent(row: ClassStudentRow, levels: readonly LevelRow[], index:
     name: row.fullName,
     shortName: row.shortName?.trim() || initials(row.fullName),
     group: row.groupName?.trim() || "Chưa phân tổ",
+    classRole: row.classRoleName?.trim() || undefined,
     points,
     spendableStars: Math.max(0, asNumber(row.spendableStars)),
     level: level.level,
     levelLabel: level.label,
     progress: level.progress,
     tone: tones[index % tones.length],
-    taskStatus: "Chưa bắt đầu",
+    taskStatus: row.taskStatus === "completed" ? "Đã xong" : row.taskStatus === "in_progress" ? "Đang làm" : "Chưa bắt đầu",
   };
 }
 

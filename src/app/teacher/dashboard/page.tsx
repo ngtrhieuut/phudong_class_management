@@ -7,14 +7,15 @@ import { getTeacherClasses, getTeacherDashboardData } from "@/lib/classroom/quer
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherDashboardPage({ searchParams }: { searchParams: Promise<{ classId?: string }> }) {
+export default async function TeacherDashboardPage({ searchParams }: { searchParams: Promise<{ classId?: string; scoreStudent?: string }> }) {
   const session = await requireUserSession();
   const appUser = await ensureAppUser({
     id: session.user.id,
     email: session.user.email,
     name: session.user.name,
   });
-  const classId = (await searchParams).classId;
+  const params = await searchParams;
+  const classId = params.classId;
   const [dashboard, classOptions] = await Promise.all([
     getTeacherDashboardData(session.user.id, classId),
     getTeacherClasses(session.user.id),
@@ -27,6 +28,7 @@ export default async function TeacherDashboardPage({ searchParams }: { searchPar
           teacherName={appUser.displayName}
           classId={dashboard.classContext.id}
           className={dashboard.classContext.name}
+          initialScoreStudentId={params.scoreStudent}
           {...toDashboardPresentation(dashboard)}
         />
       ) : (

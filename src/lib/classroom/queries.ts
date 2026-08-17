@@ -15,6 +15,7 @@ import {
   behaviorTemplates,
   badgeDefinitions,
   classes,
+  classRoles,
   classMemberships,
   classStudents,
   levelDefinitions,
@@ -53,6 +54,8 @@ export type ClassStudentRow = {
   gender: "male" | "female" | "other" | "undisclosed" | null;
   seatNo: number | null;
   groupName: string | null;
+  classRoleName: string | null;
+  taskStatus: "completed" | "in_progress" | "not_started";
   lifetimeScore: number;
   spendableStars: number;
 };
@@ -164,37 +167,63 @@ export async function getClassStudents(
       )
     : undefined;
 
-  return db
-    .select({
-      id: students.id,
-      studentCode: students.studentCode,
-      fullName: students.fullName,
-      shortName: students.shortName,
-      birthDate: students.birthDate,
-      gender: students.gender,
-      seatNo: classStudents.seatNo,
-      groupName: classStudents.groupName,
-      lifetimeScore: sql<number>`coalesce(${studentScoreSnapshots.lifetimeScore}, 0)`,
-      spendableStars: sql<number>`coalesce(${studentScoreSnapshots.spendableStars}, 0)`,
-    })
-    .from(classStudents)
-    .innerJoin(students, eq(students.id, classStudents.studentId))
-    .leftJoin(
-      studentScoreSnapshots,
-      and(
-        eq(studentScoreSnapshots.studentId, classStudents.studentId),
-        eq(studentScoreSnapshots.classId, classStudents.classId),
-      ),
-    )
-    .where(
-      and(
-        eq(classStudents.classId, classId),
-        isNull(classStudents.leftAt),
-        eq(students.status, "active"),
-        searchCondition,
-      ),
-    )
-    .orderBy(asc(classStudents.seatNo), asc(students.fullName));
+  const [studentRows, taskStatusRows] = await Promise.all([
+    db
+      .select({
+        id: students.id,
+        studentCode: students.studentCode,
+        fullName: students.fullName,
+        shortName: students.shortName,
+        birthDate: students.birthDate,
+        gender: students.gender,
+        seatNo: classStudents.seatNo,
+        groupName: classStudents.groupName,
+        classRoleName: classRoles.name,
+        lifetimeScore: sql<number>`coalesce(${studentScoreSnapshots.lifetimeScore}, 0)`,
+        spendableStars: sql<number>`coalesce(${studentScoreSnapshots.spendableStars}, 0)`,
+      })
+      .from(classStudents)
+      .innerJoin(students, eq(students.id, classStudents.studentId))
+      .leftJoin(
+        classRoles,
+        and(eq(classRoles.id, classStudents.classRoleId), eq(classRoles.classId, classStudents.classId)),
+      )
+      .leftJoin(
+        studentScoreSnapshots,
+        and(
+          eq(studentScoreSnapshots.studentId, classStudents.studentId),
+          eq(studentScoreSnapshots.classId, classStudents.classId),
+        ),
+      )
+      .where(
+        and(
+          eq(classStudents.classId, classId),
+          isNull(classStudents.leftAt),
+          eq(students.status, "active"),
+          searchCondition,
+        ),
+      )
+      .orderBy(asc(classStudents.seatNo), asc(students.fullName)),
+    db
+      .select({
+        studentId: taskAssignments.studentId,
+        taskStatus: sql<ClassStudentRow["taskStatus"]>`case
+          when count(${taskAssignments.id}) = 0 then 'not_started'
+          when count(${taskAssignments.id}) filter (where ${taskAssignments.status} = 'completed') = count(${taskAssignments.id}) then 'completed'
+          else 'in_progress'
+        end`,
+      })
+      .from(taskAssignments)
+      .innerJoin(tasks, eq(tasks.id, taskAssignments.taskId))
+      .where(and(eq(tasks.classId, classId), inArray(tasks.status, ["active", "completed", "expired"])))
+      .groupBy(taskAssignments.studentId),
+  ]);
+
+  const taskStatusByStudent = new Map(taskStatusRows.map((row) => [row.studentId, row.taskStatus]));
+  return studentRows.map((student) => ({
+    ...student,
+    taskStatus: taskStatusByStudent.get(student.id) ?? "not_started",
+  }));
 }
 
 export async function getTeacherStudentProfile(userId: string, studentId: string) {

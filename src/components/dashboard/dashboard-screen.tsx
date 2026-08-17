@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CalendarCheck,
@@ -46,6 +46,7 @@ export function DashboardScreen({
   praiseItems,
   behaviors,
   stats,
+  initialScoreStudentId,
 }: {
   teacherName: string;
   classId: string;
@@ -60,6 +61,7 @@ export function DashboardScreen({
     studentCount: number;
     recentActivityCount: number;
   };
+  initialScoreStudentId?: string;
 }) {
   const router = useRouter();
   const students = initialStudents;
@@ -68,6 +70,7 @@ export function DashboardScreen({
   const [selectedBehaviorId, setSelectedBehaviorId] = useState(behaviors[0]?.id ?? "");
   const [toast, setToast] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const initialScoreOpened = useRef(false);
 
   const selectedStudents = useMemo(
     () => students.filter((student) => selectedStudentIds.includes(student.id)),
@@ -94,6 +97,20 @@ export function DashboardScreen({
     const timeout = window.setTimeout(() => setToast(null), 3000);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (
+      initialScoreOpened.current ||
+      !initialScoreStudentId ||
+      !students.some((student) => student.id === initialScoreStudentId)
+    ) {
+      return;
+    }
+    initialScoreOpened.current = true;
+    setSelectedStudentIds([initialScoreStudentId]);
+    setSelectedBehaviorId(behaviors.find((behavior) => behavior.points > 0)?.id ?? "");
+    setIsScoreOpen(true);
+  }, [behaviors, initialScoreStudentId, students]);
 
   function openScore(studentIds: string[], direction: "positive" | "needs-improvement" = "positive") {
     setSelectedStudentIds(studentIds);
@@ -152,9 +169,9 @@ export function DashboardScreen({
               Đây là những gì đang diễn ra ở {className}.
             </p>
           </div>
-          <button className="inline-flex min-h-12 items-center justify-center gap-2 self-start rounded-full bg-[var(--secondary-container)] px-5 font-heading text-sm font-bold text-[var(--secondary)] shadow-md shadow-yellow-900/10 transition hover:bg-[#ffe16d] active:scale-[0.98] sm:self-auto">
-            <CalendarCheck size={20} weight="bold" /> Điểm danh hôm nay
-          </button>
+          <Link href="/teacher/students" className="inline-flex min-h-12 items-center justify-center gap-2 self-start rounded-full bg-[var(--secondary-container)] px-5 font-heading text-sm font-bold text-[var(--secondary)] shadow-md shadow-yellow-900/10 transition hover:bg-[#ffe16d] active:scale-[0.98] sm:self-auto">
+            <CalendarCheck size={20} weight="bold" /> Mở danh sách hôm nay
+          </Link>
         </div>
 
         <section aria-labelledby="today-heading">
@@ -211,7 +228,7 @@ export function DashboardScreen({
           <section aria-labelledby="activity-heading">
             <div className="mb-4 flex items-center justify-between">
               <h2 id="activity-heading" className="font-heading text-2xl font-bold text-[var(--on-surface)]">Hoạt động gần đây</h2>
-              <button className="font-heading text-sm font-bold text-[var(--primary)] transition hover:underline">Xem tất cả</button>
+              <Link href={`/teacher/analytics?classId=${classId}`} className="font-heading text-sm font-bold text-[var(--primary)] transition hover:underline">Xem tất cả</Link>
             </div>
             <div className="overflow-hidden rounded-[1.5rem] bg-[var(--surface-lowest)] soft-shadow">
               {activities.length > 0 ? activities.map((activity) => {
@@ -239,9 +256,9 @@ export function DashboardScreen({
               <h2 id="praise-heading" className="flex items-center gap-2 font-heading text-2xl font-bold text-[var(--primary)]">
                 <Sparkle size={24} weight="fill" /> Tuyên dương nhanh
               </h2>
-              <button aria-label="Tạo bài tuyên dương" className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-lowest)] text-[var(--primary)] shadow-sm transition hover:bg-white active:scale-95">
+              <Link href={`/teacher/praise?classId=${classId}`} aria-label="Tạo bài tuyên dương" className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-lowest)] text-[var(--primary)] shadow-sm transition hover:bg-white active:scale-95">
                 <Plus size={21} weight="bold" />
-              </button>
+              </Link>
             </div>
             <div className="space-y-4">
               {praiseItems.map((item) => (

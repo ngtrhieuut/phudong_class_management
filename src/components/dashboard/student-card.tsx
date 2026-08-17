@@ -34,7 +34,7 @@ export function StudentCard({
         <div className="min-w-0 flex-1">
           <button type="button" onClick={() => onOpen?.(student.id)} className="text-left">
             <p className="truncate font-heading text-base font-bold text-[var(--on-surface)]">{student.name}</p>
-            <p className="mt-0.5 truncate font-body text-xs text-[var(--on-surface-variant)]">{student.group}</p>
+            <p className="mt-0.5 truncate font-body text-xs text-[var(--on-surface-variant)]">{student.group}{student.classRole ? ` · ${student.classRole}` : ""}</p>
           </button>
           <div className="mt-2 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary-container)]/30 px-2 py-1 font-heading text-[11px] font-bold text-[var(--secondary)]">

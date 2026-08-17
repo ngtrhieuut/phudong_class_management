@@ -4,6 +4,7 @@ export type DemoStudent = {
   name: string;
   shortName: string;
   group: string;
+  classRole?: string;
   points: number;
   spendableStars: number;
   level: string;

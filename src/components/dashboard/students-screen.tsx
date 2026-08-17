@@ -7,11 +7,17 @@ import { MagnifyingGlass, SlidersHorizontal, UsersThree } from "@phosphor-icons/
 import { StudentCard } from "@/components/dashboard/student-card";
 import type { DemoStudent } from "@/lib/demo-data";
 
-export function StudentsScreen({ initialStudents, exportHref, importHref = "/teacher/students/import" }: { initialStudents: DemoStudent[]; exportHref?: string; importHref?: string }) {
+export function StudentsScreen({ initialStudents, exportHref, importHref = "/teacher/students/import", scoreClassId }: { initialStudents: DemoStudent[]; exportHref?: string; importHref?: string; scoreClassId?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("Tất cả tổ");
+  const [classRole, setClassRole] = useState("Tất cả chức vụ");
+  const [level, setLevel] = useState("Tất cả level");
+  const [taskStatus, setTaskStatus] = useState("Tất cả trạng thái");
   const groups = ["Tất cả tổ", ...new Set(initialStudents.map((student) => student.group))];
+  const classRoles = ["Tất cả chức vụ", ...new Set(initialStudents.map((student) => student.classRole).filter((value): value is string => Boolean(value)))];
+  const levels = ["Tất cả level", ...new Set(initialStudents.map((student) => student.level))];
+  const taskStatuses = ["Tất cả trạng thái", "Đã xong", "Đang làm", "Chưa bắt đầu"];
   const filteredStudents = useMemo(
     () =>
       initialStudents.filter((student) => {
@@ -21,9 +27,12 @@ export function StudentsScreen({ initialStudents, exportHref, importHref = "/tea
           student.studentCode?.toLocaleLowerCase().includes(normalizedQuery) ||
           student.group.toLocaleLowerCase().includes(normalizedQuery);
         const matchesGroup = group === "Tất cả tổ" || student.group === group;
-        return matchesQuery && matchesGroup;
+        const matchesClassRole = classRole === "Tất cả chức vụ" || student.classRole === classRole;
+        const matchesLevel = level === "Tất cả level" || student.level === level;
+        const matchesTaskStatus = taskStatus === "Tất cả trạng thái" || student.taskStatus === taskStatus;
+        return matchesQuery && matchesGroup && matchesClassRole && matchesLevel && matchesTaskStatus;
       }),
-    [group, initialStudents, query],
+    [classRole, group, initialStudents, level, query, taskStatus],
   );
 
   return (
@@ -49,7 +58,7 @@ export function StudentsScreen({ initialStudents, exportHref, importHref = "/tea
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm theo tên hoặc tổ..."
+            placeholder="Tìm theo tên, mã học sinh hoặc tổ..."
             className="min-h-12 w-full rounded-full border-2 border-transparent bg-[var(--surface-low)] pl-12 pr-4 font-body outline-none transition placeholder:text-[var(--outline)] focus:border-[var(--primary-fixed)] focus:bg-[var(--surface-lowest)]"
           />
         </label>
@@ -67,10 +76,15 @@ export function StudentsScreen({ initialStudents, exportHref, importHref = "/tea
           ))}
         </div>
       </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <label className="font-body text-sm"><span className="sr-only">Lọc theo chức vụ</span><select value={classRole} onChange={(event) => setClassRole(event.target.value)} className="min-h-11 w-full rounded-xl bg-[var(--surface-lowest)] px-3 font-body text-sm soft-shadow"><option value="Tất cả chức vụ">Tất cả chức vụ</option>{classRoles.filter((item) => item !== "Tất cả chức vụ").map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label className="font-body text-sm"><span className="sr-only">Lọc theo level</span><select value={level} onChange={(event) => setLevel(event.target.value)} className="min-h-11 w-full rounded-xl bg-[var(--surface-lowest)] px-3 font-body text-sm soft-shadow"><option value="Tất cả level">Tất cả level</option>{levels.filter((item) => item !== "Tất cả level").map((item) => <option key={item} value={item}>Level {item}</option>)}</select></label>
+        <label className="font-body text-sm"><span className="sr-only">Lọc theo trạng thái nhiệm vụ</span><select value={taskStatus} onChange={(event) => setTaskStatus(event.target.value)} className="min-h-11 w-full rounded-xl bg-[var(--surface-lowest)] px-3 font-body text-sm soft-shadow"><option value="Tất cả trạng thái">Tất cả trạng thái nhiệm vụ</option>{taskStatuses.filter((item) => item !== "Tất cả trạng thái").map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+      </div>
       {filteredStudents.length > 0 ? (
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filteredStudents.map((student) => (
-            <StudentCard key={student.id} student={student} onScore={() => undefined} onOpen={(studentId) => { router.push("/teacher/students/" + studentId); }} />
+            <StudentCard key={student.id} student={student} onScore={(studentId) => { const query = new URLSearchParams({ scoreStudent: studentId }); if (scoreClassId) query.set("classId", scoreClassId); router.push("/teacher/dashboard?" + query.toString()); }} onOpen={(studentId) => { router.push("/teacher/students/" + studentId); }} />
           ))}
         </div>
       ) : (

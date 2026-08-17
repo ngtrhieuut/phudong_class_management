@@ -43,7 +43,7 @@ npm run build
 npm run test:e2e
 ```
 
-Các route teacher và parent đều dùng server-side session guard; dữ liệu lớp/học sinh được đọc qua Drizzle và Neon, không dùng fixture khi chạy production. Teacher có thể đổi lớp bằng `classId`, nhập danh sách `.xlsx/.csv`, xuất CSV, ghi nhận điểm có `Idempotency-Key`, tạo nhiệm vụ, đổi quà, đăng tuyên dương và quản lý liên kết phụ huynh theo từng học sinh. Parent chỉ đọc được học sinh có quan hệ guardian hợp lệ.
+Các route teacher và parent đều dùng server-side session guard; dữ liệu lớp/học sinh được đọc qua Drizzle và Neon, không dùng fixture khi chạy production. Teacher có thể đổi lớp bằng `classId`, nhập danh sách `.xlsx/.csv` (có [template CSV](public/templates/student-import-template.csv)), xuất CSV, ghi nhận điểm có `Idempotency-Key`, tạo nhiệm vụ, đổi quà, đăng tuyên dương và quản lý liên kết phụ huynh theo từng học sinh. Parent chỉ đọc được học sinh có quan hệ guardian hợp lệ.
 
 Liên kết guardian hỗ trợ hai cách: liên kết ngay với account đã đăng nhập, hoặc tạo invitation token một lần có hạn dùng; phụ huynh phải đăng nhập đúng email nhận lời mời trước khi xác nhận. Thu hồi sẽ tắt quyền xem và nhận thông báo nhưng vẫn giữ audit log.
 

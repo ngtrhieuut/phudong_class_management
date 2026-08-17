@@ -31,7 +31,7 @@ export default async function TeacherStudentsPage({ searchParams }: { searchPara
 
   return (
     <AppShell active="Học sinh" classOptions={classOptions} selectedClassId={classContext?.id ?? classId} classSwitcherPath="/teacher/students" teacherName={appUser.displayName} className={classContext?.name} schoolYearName={classContext?.schoolYearName}>
-      <StudentsScreen initialStudents={presentationStudents} importHref={classContext ? `/teacher/students/import?classId=${classContext.id}` : "/teacher/students/import"} exportHref={classContext ? `/api/teacher/students/export?classId=${classContext.id}` : undefined} />
+      <StudentsScreen initialStudents={presentationStudents} scoreClassId={classContext?.id} importHref={classContext ? `/teacher/students/import?classId=${classContext.id}` : "/teacher/students/import"} exportHref={classContext ? `/api/teacher/students/export?classId=${classContext.id}` : undefined} />
     </AppShell>
   );
 }

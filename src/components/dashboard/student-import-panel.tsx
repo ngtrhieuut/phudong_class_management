@@ -146,7 +146,10 @@ export function StudentImportPanel({ context }: { context: ImportContext }) {
         </label>
       </div>
 
-      <p className="mt-5 rounded-2xl bg-[var(--surface-low)] px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{fileName ? `File đã chọn: ${fileName}` : "Hỗ trợ .xlsx, .csv và .tsv. Cột bắt buộc: Mã học sinh và Họ và tên."}</p>
+      <div className="mt-5 flex flex-col gap-3 rounded-2xl bg-[var(--surface-low)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="font-body text-sm text-[var(--on-surface-variant)]">{fileName ? `File đã chọn: ${fileName}` : "Hỗ trợ .xlsx, .csv và .tsv. Cột bắt buộc: Mã học sinh và Họ và tên."}</p>
+        <a href="/templates/student-import-template.csv" download className="shrink-0 font-heading text-sm font-bold text-[var(--primary)] hover:underline">Tải template CSV</a>
+      </div>
       {isReading ? <p className="mt-4 font-body text-sm text-[var(--primary)]">Đang đọc và chuẩn bị bản xem trước...</p> : null}
       {source && !result && !isReading ? <button type="button" onClick={() => void runImport()} className="mt-4 min-h-11 rounded-full bg-[var(--secondary-container)] px-5 font-heading text-sm font-bold text-[var(--secondary)]">Kiểm tra file</button> : null}
       {error ? <p role="alert" className="mt-4 flex items-center gap-2 font-body text-sm text-[var(--needs-improvement)]"><WarningCircle size={18} /> {error}</p> : null}
