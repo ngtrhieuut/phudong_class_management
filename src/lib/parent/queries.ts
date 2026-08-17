@@ -3,6 +3,7 @@ import { and, asc, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   badgeDefinitions,
+  behaviorTemplates,
   classStudents,
   levelDefinitions,
   notifications,
@@ -88,7 +89,19 @@ export async function getParentChildData(userId: string, studentId: string) {
   if (!child) throw new Error("FORBIDDEN_STUDENT_ACCESS");
 
   const { from: todayStart, to: tomorrowStart } = getVietnamDayRange();
-  const [scores, tasksData, badges, levels, praise, guardianNotifications, redemptions, scoreTotalsRows] = await Promise.all([
+  const [
+    scores,
+    tasksData,
+    badges,
+    levels,
+    praise,
+    guardianNotifications,
+    redemptions,
+    scoreTotalsRows,
+    weeklyTrend,
+    monthlyTrend,
+    behaviorBreakdown,
+  ] = await Promise.all([
     db
       .select({
         id: scoreTransactions.id,
@@ -176,6 +189,49 @@ export async function getParentChildData(userId: string, studentId: string) {
       })
       .from(scoreTransactions)
       .where(and(eq(scoreTransactions.classId, child.classId), eq(scoreTransactions.studentId, studentId))),
+    db
+      .select({
+        period: sql<string>`to_char(date_trunc('week', ${scoreTransactions.occurredAt} at time zone 'Asia/Ho_Chi_Minh'), 'YYYY-MM-DD')`,
+        total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
+        events: sql<number>`count(${scoreTransactions.id})`,
+      })
+      .from(scoreTransactions)
+      .where(
+        and(
+          eq(scoreTransactions.classId, child.classId),
+          eq(scoreTransactions.studentId, studentId),
+          sql`${scoreTransactions.occurredAt} >= now() - interval '8 weeks'`,
+        ),
+      )
+      .groupBy(sql`date_trunc('week', ${scoreTransactions.occurredAt} at time zone 'Asia/Ho_Chi_Minh')`)
+      .orderBy(asc(sql`date_trunc('week', ${scoreTransactions.occurredAt} at time zone 'Asia/Ho_Chi_Minh')`)),
+    db
+      .select({
+        period: sql<string>`to_char(date_trunc('month', ${scoreTransactions.occurredAt} at time zone 'Asia/Ho_Chi_Minh'), 'YYYY-MM')`,
+        total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
+        events: sql<number>`count(${scoreTransactions.id})`,
+      })
+      .from(scoreTransactions)
+      .where(
+        and(
+          eq(scoreTransactions.classId, child.classId),
+          eq(scoreTransactions.studentId, studentId),
+          sql`${scoreTransactions.occurredAt} >= now() - interval '6 months'`,
+        ),
+      )
+      .groupBy(sql`date_trunc('month', ${scoreTransactions.occurredAt} at time zone 'Asia/Ho_Chi_Minh')`)
+      .orderBy(asc(sql`date_trunc('month', ${scoreTransactions.occurredAt} at time zone 'Asia/Ho_Chi_Minh')`)),
+    db
+      .select({
+        category: sql<string>`coalesce(${behaviorTemplates.category}, 'other')`,
+        total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
+        events: sql<number>`count(${scoreTransactions.id})`,
+      })
+      .from(scoreTransactions)
+      .leftJoin(behaviorTemplates, eq(behaviorTemplates.id, scoreTransactions.behaviorTemplateId))
+      .where(and(eq(scoreTransactions.classId, child.classId), eq(scoreTransactions.studentId, studentId)))
+      .groupBy(sql`coalesce(${behaviorTemplates.category}, 'other')`)
+      .orderBy(desc(sql`sum(${scoreTransactions.lifetimeDelta})`)),
   ]);
 
   return {
@@ -192,6 +248,9 @@ export async function getParentChildData(userId: string, studentId: string) {
       positive: Number(scoreTotalsRows[0]?.positive ?? 0),
       improvements: Number(scoreTotalsRows[0]?.improvements ?? 0),
     },
+    weeklyTrend,
+    monthlyTrend,
+    behaviorBreakdown,
   };
 }
 
