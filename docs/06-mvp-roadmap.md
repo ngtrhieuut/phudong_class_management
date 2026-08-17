@@ -55,6 +55,9 @@
 - PWA install foundation: manifest, icons, standalone metadata and safe static-asset service-worker cache.
 - Teacher report exports: activity ledger, task assignments and monthly CSV summary with class authorization.
 - Internal teacher notification center for task/reward operational events.
+- Student import from Excel/CSV with preview, validation, duplicate detection and transactional commit.
+- Multi-class selector with class-scoped teacher dashboard and analytics.
+- Read-only admin foundation for organization overview, configuration counts and audit log filtering.
 
 ## Phase 5 — Pilot
 
@@ -72,10 +75,10 @@ Theo dõi:
 
 - Offline queue cho thao tác ghi điểm (chưa bật để tránh ghi dữ liệu nhạy cảm ngoài kiểm soát).
 - Push notification.
-- Import học sinh từ Excel/Google Sheet.
 - Export báo cáo PDF/Excel (CSV reports are available in MVP).
-- Multi-class teacher dashboard.
-- School admin CRUD/configuration dashboard.
+- Admin CRUD/configuration nâng cao; MVP hiện có admin foundation read-only.
+- Authenticated integration/E2E tests chạy với Neon Auth và database fixture riêng.
+- Production bootstrap/import roster sau khi migration Neon main được explicit approval.
 - Rule engine cho badge/task tự động.
 - AI gợi ý nhận xét tuần dựa trên dữ liệu có cấu trúc, giáo viên duyệt trước khi gửi.
 - Template lớp theo khối 1–5.

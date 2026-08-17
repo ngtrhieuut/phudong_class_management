@@ -19,3 +19,22 @@ test("protected teacher dashboard redirects unauthenticated visitors", async ({ 
   await expect(page).toHaveURL(/\/auth\/sign-in(?:\?setup=required)?$/);
   await expect(page.getByRole("heading", { name: "Chào mừng trở lại" })).toBeVisible();
 });
+
+test("public shell exposes safe PWA assets and security headers", async ({ request }) => {
+  const manifest = await request.get("/manifest.webmanifest");
+  expect(manifest.ok()).toBeTruthy();
+  expect(manifest.headers()["content-type"]).toContain("application/manifest+json");
+  await expect(manifest.json()).resolves.toMatchObject({
+    display: "standalone",
+    lang: "vi-VN",
+  });
+
+  const serviceWorker = await request.get("/sw.js");
+  expect(serviceWorker.ok()).toBeTruthy();
+  expect(await serviceWorker.text()).toContain("Never cache authenticated pages");
+
+  const response = await request.get("/");
+  expect(response.headers()["x-content-type-options"]).toBe("nosniff");
+  expect(response.headers()["x-frame-options"]).toBe("DENY");
+  expect(response.headers()["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+});

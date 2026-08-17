@@ -51,6 +51,8 @@ Liên kết guardian hỗ trợ hai cách: liên kết ngay với account đã �
 
 Ứng dụng có PWA foundation: manifest, icon, standalone metadata và service worker chỉ cache app shell/static assets. Các route teacher, parent và API chứa dữ liệu học sinh không được cache.
 
+Production responses bật các security headers cơ bản (nosniff, frame deny, strict referrer policy và permissions policy). Health check dùng `Cache-Control: no-store` để monitoring không nhận trạng thái cũ.
+
 ## Database và deployment
 
 1. Sao chép `.env.example` thành `.env.local` và điền `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`.
