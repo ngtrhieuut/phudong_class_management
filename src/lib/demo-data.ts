@@ -1,5 +1,6 @@
 export type DemoStudent = {
   id: string;
+  studentCode?: string;
   name: string;
   shortName: string;
   group: string;

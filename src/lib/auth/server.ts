@@ -18,6 +18,15 @@ export const auth = createNeonAuth({
   logLevel: authConfigured ? "warn" : "silent",
 });
 
+export async function getUserSession() {
+  if (!authConfigured) {
+    return null;
+  }
+
+  const { data: session } = await auth.getSession();
+  return session?.user ? session : null;
+}
+
 /**
  * Server-component guard for application routes.
  *
@@ -29,8 +38,8 @@ export async function requireUserSession() {
     redirect("/auth/sign-in?setup=required");
   }
 
-  const { data: session } = await auth.getSession();
-  if (!session?.user) {
+  const session = await getUserSession();
+  if (!session) {
     redirect("/auth/sign-in");
   }
 

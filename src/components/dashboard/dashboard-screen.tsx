@@ -39,25 +39,35 @@ const behaviorToneClasses = {
 
 export function DashboardScreen({
   teacherName,
+  classId,
   className,
   students: initialStudents,
   activities,
   praiseItems,
   behaviors,
+  stats,
 }: {
   teacherName: string;
+  classId: string;
   className: string;
   students: DemoStudent[];
   activities: DemoActivity[];
   praiseItems: DemoPraise[];
   behaviors: DemoBehavior[];
+  stats: {
+    totalLifetimeScore: number;
+    todayScore: number;
+    studentCount: number;
+    recentActivityCount: number;
+  };
 }) {
   const router = useRouter();
-  const [students, setStudents] = useState(initialStudents);
+  const students = initialStudents;
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [selectedBehaviorId, setSelectedBehaviorId] = useState(behaviors[0]?.id ?? "");
   const [toast, setToast] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedStudents = useMemo(
     () => students.filter((student) => selectedStudentIds.includes(student.id)),
@@ -87,35 +97,43 @@ export function DashboardScreen({
 
   function openScore(studentIds: string[], direction: "positive" | "needs-improvement" = "positive") {
     setSelectedStudentIds(studentIds);
-    setSelectedBehaviorId(direction === "positive" ? behaviors[0]?.id ?? "" : behaviors[1]?.id ?? "");
+    setSelectedBehaviorId(
+      behaviors.find((behavior) => (direction === "positive" ? behavior.points > 0 : behavior.points < 0))?.id ?? "",
+    );
     setIsScoreOpen(true);
   }
 
-  function applyScore() {
+  async function applyScore() {
     const behavior = behaviors.find((item) => item.id === selectedBehaviorId);
     if (!behavior || selectedStudentIds.length === 0) {
       return;
     }
-    const isNeedsImprovement = behavior.points < 0;
-    setStudents((current) =>
-      current.map((student) => {
-        if (!selectedStudentIds.includes(student.id)) {
-          return student;
-        }
-        const delta = isNeedsImprovement ? behavior.points : Math.abs(behavior.points);
-        return {
-          ...student,
-          points: Math.max(0, student.points + delta),
-          spendableStars: Math.max(0, student.spendableStars + delta),
-        };
-      }),
-    );
-    setIsScoreOpen(false);
-    setToast(
-      isNeedsImprovement
-        ? "Đã ghi nhận một điều cần cải thiện."
-        : "Đã cộng sao và lưu ghi nhận tích cực.",
-    );
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("/api/teacher/score", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          classId,
+          studentIds: selectedStudentIds,
+          behaviorTemplateId: behavior.id,
+          reason: behavior.label,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Không thể lưu ghi nhận.");
+      }
+
+      setIsScoreOpen(false);
+      setToast(behavior.points < 0 ? "Đã ghi nhận điều cần cải thiện." : "Đã lưu ghi nhận tích cực.");
+      router.refresh();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "Không thể lưu ghi nhận.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -146,24 +164,24 @@ export function DashboardScreen({
               <Star size={110} weight="fill" className="absolute -right-5 -top-8 text-[var(--secondary-container)] opacity-20" />
               <p className="relative font-heading text-xs font-bold uppercase tracking-wide text-[var(--on-surface-variant)]">Tổng sao tích cực</p>
               <div className="relative mt-5 flex items-end gap-2">
-                <span className="font-heading text-5xl font-bold text-[var(--secondary-container)]">124</span>
-                <span className="mb-1 font-heading text-sm font-bold text-[var(--primary)]">+12 hôm nay</span>
+                <span className="font-heading text-5xl font-bold text-[var(--secondary-container)]">{stats.totalLifetimeScore}</span>
+                <span className="mb-1 font-heading text-sm font-bold text-[var(--primary)]">{stats.todayScore >= 0 ? "+" : ""}{stats.todayScore} hôm nay</span>
               </div>
             </div>
             <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-5 soft-shadow">
               <div className="flex items-start justify-between gap-3">
-                <p className="font-heading text-xs font-bold uppercase tracking-wide text-[var(--on-surface-variant)]">Điểm danh</p>
+                <p className="font-heading text-xs font-bold uppercase tracking-wide text-[var(--on-surface-variant)]">Sĩ số đang quản lý</p>
                 <span className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-low)] px-3 py-1 font-heading text-xs font-bold text-[var(--primary)]">
-                  <CheckCircle size={15} weight="fill" /> 28/32
+                  <CheckCircle size={15} weight="fill" /> {stats.studentCount} bạn
                 </span>
               </div>
               <div className="mt-7">
                 <div className="mb-2 flex justify-between font-body text-sm">
-                  <span className="text-[var(--on-surface)]">Có mặt: 28</span>
-                  <span className="text-[var(--needs-improvement)]">Vắng: 4</span>
+                  <span className="text-[var(--on-surface)]">Danh sách đang hoạt động</span>
+                  <span className="text-[var(--primary)]">100%</span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-[var(--surface-variant)]">
-                  <div className="h-full w-[87.5%] rounded-full bg-[var(--primary)]" />
+                  <div className="h-full w-full rounded-full bg-[var(--primary)]" />
                 </div>
               </div>
             </div>
@@ -178,8 +196,8 @@ export function DashboardScreen({
                   ))}
                 </div>
                 <div>
-                  <p className="font-heading text-2xl font-bold text-[var(--primary)]">+18</p>
-                  <p className="font-body text-xs text-[var(--on-surface-variant)]">ghi nhận mới hôm nay</p>
+                  <p className="font-heading text-2xl font-bold text-[var(--primary)]">{stats.recentActivityCount}</p>
+                  <p className="font-body text-xs text-[var(--on-surface-variant)]">ghi nhận gần đây</p>
                 </div>
               </div>
             </div>
@@ -193,7 +211,7 @@ export function DashboardScreen({
               <button className="font-heading text-sm font-bold text-[var(--primary)] transition hover:underline">Xem tất cả</button>
             </div>
             <div className="overflow-hidden rounded-[1.5rem] bg-[var(--surface-lowest)] soft-shadow">
-              {activities.map((activity) => {
+              {activities.length > 0 ? activities.map((activity) => {
                 const Icon = activityIcons[activity.type];
                 return (
                   <div key={activity.id} className="flex items-center gap-4 border-b border-[var(--surface-high)] p-5 last:border-b-0">
@@ -207,7 +225,9 @@ export function DashboardScreen({
                     <span className="hidden shrink-0 font-body text-xs text-[var(--on-surface-variant)] sm:block">{activity.time}</span>
                   </div>
                 );
-              })}
+              }) : (
+                <p className="p-6 font-body text-sm text-[var(--on-surface-variant)]">Chưa có ghi nhận nào trong lớp.</p>
+              )}
             </div>
           </section>
 
@@ -315,8 +335,8 @@ export function DashboardScreen({
                 );
               })}
             </div>
-            <button type="button" onClick={applyScore} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-5 font-heading text-sm font-bold text-white shadow-md shadow-blue-900/10 transition hover:bg-[var(--primary-container)] active:scale-[0.98]">
-              <CheckCircle size={20} weight="fill" /> Lưu ghi nhận
+            <button type="button" onClick={applyScore} disabled={isSubmitting || behaviors.length === 0} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-5 font-heading text-sm font-bold text-white shadow-md shadow-blue-900/10 transition hover:bg-[var(--primary-container)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">
+              <CheckCircle size={20} weight="fill" /> {isSubmitting ? "Đang lưu..." : behaviors.length === 0 ? "Chưa có hành vi" : "Lưu ghi nhận"}
             </button>
           </section>
         </div>

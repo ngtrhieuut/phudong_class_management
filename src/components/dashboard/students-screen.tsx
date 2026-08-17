@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { MagnifyingGlass, SlidersHorizontal, UsersThree } from "@phosphor-icons/react";
@@ -14,7 +15,11 @@ export function StudentsScreen({ initialStudents }: { initialStudents: DemoStude
   const filteredStudents = useMemo(
     () =>
       initialStudents.filter((student) => {
-        const matchesQuery = student.name.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+        const normalizedQuery = query.toLocaleLowerCase();
+        const matchesQuery =
+          student.name.toLocaleLowerCase().includes(normalizedQuery) ||
+          student.studentCode?.toLocaleLowerCase().includes(normalizedQuery) ||
+          student.group.toLocaleLowerCase().includes(normalizedQuery);
         const matchesGroup = group === "Tất cả tổ" || student.group === group;
         return matchesQuery && matchesGroup;
       }),
@@ -29,8 +34,11 @@ export function StudentsScreen({ initialStudents }: { initialStudents: DemoStude
           <h1 className="mt-2 font-heading text-4xl font-bold tracking-[-0.03em] text-[var(--primary)]">Học sinh</h1>
           <p className="mt-3 font-body text-base text-[var(--on-surface-variant)]">Theo dõi tiến bộ và ghi nhận nhanh cho từng bạn.</p>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-[var(--surface-low)] px-4 py-3 font-heading text-sm font-bold text-[var(--primary)]">
-          <UsersThree size={20} weight="fill" /> 32 học sinh
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full bg-[var(--surface-low)] px-4 py-3 font-heading text-sm font-bold text-[var(--primary)]">
+            <UsersThree size={20} weight="fill" /> {initialStudents.length} học sinh
+          </div>
+          <Link href="/teacher/students/import" className="inline-flex min-h-11 items-center rounded-full bg-[var(--primary)] px-4 font-heading text-sm font-bold text-white transition hover:bg-[var(--primary-container)]">Nhập danh sách</Link>
         </div>
       </div>
       <div className="mt-8 flex flex-col gap-3 rounded-[1.5rem] bg-[var(--surface-lowest)] p-4 soft-shadow sm:flex-row">
@@ -40,7 +48,7 @@ export function StudentsScreen({ initialStudents }: { initialStudents: DemoStude
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm theo tên..."
+            placeholder="Tìm theo tên hoặc tổ..."
             className="min-h-12 w-full rounded-full border-2 border-transparent bg-[var(--surface-low)] pl-12 pr-4 font-body outline-none transition placeholder:text-[var(--outline)] focus:border-[var(--primary-fixed)] focus:bg-[var(--surface-lowest)]"
           />
         </label>
