@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, Gift, Notebook, Star, Trophy } from "@phosphor-icons/react/dist/ssr";
 import { AppShell } from "@/components/layout/app-shell";
+import { requireUserSession } from "@/lib/auth/server";
 import { dashboardStudents } from "@/lib/demo-data";
 
+export const dynamic = "force-dynamic";
+
 export default async function StudentDetailPage({ params }: { params: Promise<{ studentId: string }> }) {
+  await requireUserSession();
+
   const { studentId } = await params;
   const student = dashboardStudents.find((item) => item.id === studentId) ?? dashboardStudents[0];
 

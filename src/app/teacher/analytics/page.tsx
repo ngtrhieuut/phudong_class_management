@@ -1,7 +1,12 @@
 import { ChartBar, CheckCircle, Star, TrendUp } from "@phosphor-icons/react/dist/ssr";
 import { AppShell } from "@/components/layout/app-shell";
+import { requireUserSession } from "@/lib/auth/server";
 
-export default function TeacherAnalyticsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function TeacherAnalyticsPage() {
+  await requireUserSession();
+
   return (
     <AppShell active="Thống kê">
       <div className="mx-auto max-w-6xl px-5 py-7 sm:px-8">

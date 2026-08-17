@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { ArrowRight, Bell, CheckCircle, Clock, Gift, House, Medal, Sparkle, Star, TrendUp, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { requireUserSession } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
-export default function ParentTodayPage() {
+export default async function ParentTodayPage() {
+  await requireUserSession();
+
   return (
     <main className="min-h-[100dvh] bg-[var(--surface)] pb-24">
       <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-[var(--surface-high)] bg-[var(--surface)]/95 px-5 backdrop-blur md:px-8">

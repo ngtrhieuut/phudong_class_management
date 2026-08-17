@@ -1,8 +1,13 @@
 import { Sparkle } from "@phosphor-icons/react/dist/ssr";
 import { AppShell } from "@/components/layout/app-shell";
+import { requireUserSession } from "@/lib/auth/server";
 import { recentPraise } from "@/lib/demo-data";
 
-export default function TeacherPraisePage() {
+export const dynamic = "force-dynamic";
+
+export default async function TeacherPraisePage() {
+  await requireUserSession();
+
   return (
     <AppShell active="Góc tuyên dương">
       <div className="mx-auto max-w-5xl px-5 py-7 sm:px-8">
