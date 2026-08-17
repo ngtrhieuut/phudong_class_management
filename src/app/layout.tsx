@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito_Sans, Quicksand } from "next/font/google";
+import type { ReactNode } from "react";
 import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
 import "./globals.css";
 
@@ -30,7 +31,7 @@ export const viewport: Viewport = {
   themeColor: "#005da7",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="vi" className={quiksand.variable + " " + nunitoSans.variable}>
       <body>
