@@ -4,6 +4,19 @@ Web quản lý lớp học theo hướng **quản lý – động viên – tuy�
 
 Mục tiêu của sản phẩm là giúp giáo viên tiểu học ghi nhận hành vi tích cực hằng ngày, quản lý điểm thưởng/phạt, nhiệm vụ, huy hiệu, quà tặng, tiến bộ học sinh và nội dung tuyên dương; đồng thời tạo một kênh theo dõi đơn giản cho phụ huynh.
 
+## Stack đã chọn
+
+- **Frontend:** Next.js + TypeScript + Tailwind CSS.
+- **Database:** Neon PostgreSQL.
+- **ORM/query layer:** ưu tiên Drizzle ORM.
+- **Authentication:** ưu tiên Neon Auth; fallback Auth.js nếu có blocker thực tế.
+- **Deployment:** Vercel.
+- **Source control:** GitHub.
+- **Validation:** Zod.
+- **Testing:** unit/integration + Playwright E2E.
+
+Codex phải sử dụng **Neon MCP, GitHub Connector và Vercel Connector** để kiểm tra và kiểm soát trạng thái thực tế của database, source code và deployment. Chi tiết tại `AGENTS.md` và `docs/09-codex-mcp-workflow.md`.
+
 ## Tài liệu dự án
 
 - `docs/01-product-brief.md` — Product brief chi tiết, mục tiêu, đối tượng, phạm vi.
@@ -13,9 +26,11 @@ Mục tiêu của sản phẩm là giúp giáo viên tiểu học ghi nhận hà
 - `docs/05-ui-ux-spec.md` — Kiến trúc màn hình, component và nguyên tắc UX/UI.
 - `docs/06-mvp-roadmap.md` — Lộ trình MVP và tiêu chí nghiệm thu.
 - `docs/07-security-privacy.md` — Bảo mật, quyền riêng tư và dữ liệu học sinh.
-- `docs/08-implementation-guide.md` — Gợi ý kiến trúc kỹ thuật và cách triển khai.
-- `AGENTS.md` — Hướng dẫn cho Codex/AI coding agent khi phát triển repo.
-- `assets/reference/class-management-concept.jpg` — Ảnh concept tham chiếu đã tối ưu dung lượng.
+- `docs/08-implementation-guide.md` — Kiến trúc kỹ thuật Neon/Vercel và cách triển khai.
+- `docs/09-codex-mcp-workflow.md` — Quy trình Codex dùng Neon MCP + GitHub + Vercel Connector.
+- `AGENTS.md` — Luật bắt buộc cho Codex/AI coding agent khi phát triển repo.
+- `.env.example` — template environment variables, không chứa secret.
+- `assets/reference/class-management-concept.jpg` — ảnh concept tham chiếu đã tối ưu dung lượng.
 
 ## Phạm vi MVP khuyến nghị
 
