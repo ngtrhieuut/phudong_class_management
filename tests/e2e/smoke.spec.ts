@@ -20,6 +20,19 @@ test("protected teacher dashboard redirects unauthenticated visitors", async ({ 
   await expect(page.getByRole("heading", { name: "Chào mừng trở lại" })).toBeVisible();
 });
 
+test("registration page validates password confirmation before calling auth", async ({ page }) => {
+  await page.goto("/auth/sign-up");
+
+  await expect(page.getByRole("heading", { name: "Tạo tài khoản" })).toBeVisible();
+  await page.getByLabel("Họ và tên").fill("Nguyễn Thị Mai");
+  await page.getByLabel("Email").fill("mai@example.com");
+  await page.getByLabel("Mật khẩu", { exact: true }).fill("matkhau-an-toan");
+  await page.getByLabel("Nhập lại mật khẩu").fill("matkhau-khac");
+  await page.getByRole("button", { name: "Tạo tài khoản" }).click();
+
+  await expect(page.locator("form p[role='alert']")).toContainText("Mật khẩu xác nhận không khớp");
+});
+
 test("public shell exposes safe PWA assets and security headers", async ({ request }) => {
   const manifest = await request.get("/manifest.webmanifest");
   expect(manifest.ok()).toBeTruthy();

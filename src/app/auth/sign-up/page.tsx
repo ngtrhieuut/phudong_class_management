@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Star } from "@phosphor-icons/react/dist/ssr";
+
 import { authConfigured } from "@/lib/auth/server";
-import { SignInForm } from "./sign-in-form";
+import { SignUpForm } from "./sign-up-form";
 
 function safeCallbackPath(value: string | undefined) {
   return value && value.startsWith("/") && !value.startsWith("//") ? value : "/teacher/dashboard";
 }
 
-export default async function SignInPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const params = await searchParams;
   const callbackPath = safeCallbackPath(params.next);
 
@@ -29,55 +30,46 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
                 </div>
               </div>
               <h1 className="max-w-sm font-heading text-4xl font-bold leading-tight">
-                Mỗi ngày một dấu mốc tiến bộ.
+                Bắt đầu hành trình lớp học tích cực.
               </h1>
               <p className="mt-5 max-w-sm font-body text-base leading-7 text-white/80">
-                Ghi nhận tích cực để lớp học cùng lớn lên trong sự tin tưởng.
+                Tạo tài khoản để ghi nhận tiến bộ và đồng hành cùng lớp học mỗi ngày.
               </p>
             </div>
             <div className="relative flex items-center gap-3 rounded-2xl bg-white/10 p-4">
               <ShieldCheck size={24} weight="fill" />
               <p className="font-body text-sm leading-5 text-white/85">
-                Dữ liệu lớp học được bảo vệ theo từng vai trò.
+                Mật khẩu và session được xử lý bởi Neon Auth.
               </p>
             </div>
           </div>
           <div className="p-6 sm:p-10 lg:p-14">
             <Link
-              href="/"
+              href="/auth/sign-in"
               className="mb-12 inline-flex min-h-11 items-center gap-2 font-heading text-sm font-bold text-[var(--primary)] transition hover:gap-3"
             >
-              <ArrowLeft size={18} weight="bold" /> Về trang giới thiệu
+              <ArrowLeft size={18} weight="bold" /> Về đăng nhập
             </Link>
             <div className="mb-8">
-              <p className="font-heading text-sm font-bold uppercase tracking-[0.16em] text-[var(--tertiary)]">Khu vực bảo mật</p>
-              <h2 className="mt-3 font-heading text-3xl font-bold text-[var(--on-surface)]">Chào mừng trở lại</h2>
+              <p className="font-heading text-sm font-bold uppercase tracking-[0.16em] text-[var(--tertiary)]">Tài khoản mới</p>
+              <h2 className="mt-3 font-heading text-3xl font-bold text-[var(--on-surface)]">Tạo tài khoản</h2>
               <p className="mt-3 font-body leading-7 text-[var(--on-surface-variant)]">
-                Đăng nhập để mở dashboard lớp học của bạn.
+                Dùng email của bạn để đăng ký tài khoản Phù Đổng.
               </p>
             </div>
             {authConfigured ? (
-              <SignInForm callbackPath={callbackPath} />
+              <SignUpForm callbackPath={callbackPath} />
             ) : (
               <div role="alert" className="rounded-2xl bg-[var(--needs-improvement-soft)] px-4 py-4 font-body text-sm leading-6 text-[var(--needs-improvement)]">
                 Authentication chưa được cấu hình cho môi trường này. Vui lòng bổ sung
                 <code className="mx-1 rounded bg-white/60 px-1">NEON_AUTH_BASE_URL</code>
                 và
                 <code className="mx-1 rounded bg-white/60 px-1">NEON_AUTH_COOKIE_SECRET</code>
-                trước khi đăng nhập.
+                trước khi đăng ký.
               </div>
             )}
-            <p className="mt-6 text-center font-body text-sm text-[var(--on-surface-variant)]">
-              Chưa có tài khoản?{" "}
-              <Link
-                href={`/auth/sign-up?next=${encodeURIComponent(callbackPath)}`}
-                className="font-heading font-bold text-[var(--primary)] underline decoration-[var(--primary-fixed)] underline-offset-4 transition hover:text-[var(--primary-container)]"
-              >
-                Đăng ký ngay
-              </Link>
-            </p>
             <p className="mt-8 text-center font-body text-xs leading-5 text-[var(--on-surface-variant)]">
-              Authentication đang dùng Managed Better Auth của Neon. Tài khoản và session không nằm trong client database.
+              Khi đăng ký, bạn đồng ý sử dụng tài khoản cho mục đích quản lý lớp học và bảo vệ dữ liệu học sinh.
             </p>
           </div>
         </div>

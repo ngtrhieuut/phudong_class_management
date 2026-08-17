@@ -32,8 +32,14 @@ export default function Home() {
               Đăng nhập hệ thống <ArrowRight size={18} weight="bold" />
             </Link>
             <Link
-              href="/parent/today"
+              href="/auth/sign-up"
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border-2 border-[var(--primary-fixed)] bg-[var(--surface-lowest)] px-6 font-heading text-sm font-bold text-[var(--primary)] transition hover:border-[var(--primary)] active:scale-[0.98]"
+            >
+              Tạo tài khoản <UsersThree size={18} weight="bold" />
+            </Link>
+            <Link
+              href="/parent/today"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-2 font-heading text-sm font-bold text-[var(--on-surface-variant)] transition hover:text-[var(--primary)]"
             >
               Xem trải nghiệm phụ huynh
             </Link>

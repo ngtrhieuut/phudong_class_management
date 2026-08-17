@@ -56,9 +56,10 @@ Production responses bật các security headers cơ bản (nosniff, frame deny,
 ## Database và deployment
 
 1. Sao chép `.env.example` thành `.env.local` và điền `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`.
-2. Kiểm tra migration bằng `npm run db:check` và thử migration trên Neon branch trước khi apply vào main.
-3. Chỉ chạy `npm run db:migrate` khi đã xác nhận đúng database/branch; không commit secret hoặc file `.vercel`.
-4. Sau khi push `main`, kiểm tra deployment trên Vercel và gọi `/api/health/db`. Các route protected phải redirect về `/auth/sign-in` khi chưa đăng nhập.
+2. Người dùng có thể đăng ký tài khoản tại `/auth/sign-up`; Neon Auth xử lý password/session, còn application user được đồng bộ khi truy cập route được bảo vệ.
+3. Kiểm tra migration bằng `npm run db:check` và thử migration trên Neon branch trước khi apply vào main.
+4. Chỉ chạy `npm run db:migrate` khi đã xác nhận đúng database/branch; không commit secret hoặc file `.vercel`.
+5. Sau khi push `main`, kiểm tra deployment trên Vercel và gọi `/api/health/db`. Các route protected phải redirect về `/auth/sign-in` khi chưa đăng nhập.
 
 Seed trong `src/db/seed.ts` chỉ dành cho môi trường demo/local. Dữ liệu danh sách học sinh thật phải đi qua import có preview, validation, duplicate detection và audit log; không tự động seed dữ liệu PII vào production.
 

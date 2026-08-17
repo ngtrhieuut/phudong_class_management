@@ -3,6 +3,23 @@ import { z } from 'zod';
 const uuidSchema = z.string().uuid();
 const nonEmptyText = (max: number) => z.string().trim().min(1).max(max);
 
+export const signUpInputSchema = z
+  .object({
+    name: nonEmptyText(100),
+    email: z.string().trim().email("Email không hợp lệ.").max(320, "Email quá dài."),
+    password: z
+      .string()
+      .min(8, "Mật khẩu cần có ít nhất 8 ký tự.")
+      .max(128, "Mật khẩu không được dài quá 128 ký tự."),
+    confirmPassword: z.string().min(1, "Vui lòng nhập lại mật khẩu."),
+  })
+  .refine((input) => input.password === input.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Mật khẩu xác nhận không khớp.",
+  });
+
+export type SignUpInput = z.infer<typeof signUpInputSchema>;
+
 export const scoreTransactionInputSchema = z
   .object({
     classId: uuidSchema,
