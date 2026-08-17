@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { authConfigured, getUserSession } from "@/lib/auth/server";
@@ -25,6 +26,12 @@ function errorResponse(error: unknown, fallback: string) {
   return NextResponse.json({ error: fallback }, { status: 500, headers: noStoreHeaders() });
 }
 
+function revalidateStudentViews(studentId: string) {
+  revalidatePath("/teacher/dashboard");
+  revalidatePath("/teacher/students");
+  revalidatePath(`/teacher/students/${studentId}`);
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ studentId: string }> }) {
   try {
     const actor = await getActor(request);
@@ -35,7 +42,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ st
     } catch {
       return NextResponse.json({ error: "Dữ liệu học sinh không hợp lệ." }, { status: 400, headers: noStoreHeaders() });
     }
-    const result = await updateStudent(payload, (await params).studentId, actor.actorUserId!);
+    const studentId = (await params).studentId;
+    const result = await updateStudent(payload, studentId, actor.actorUserId!);
+    revalidateStudentViews(studentId);
     return NextResponse.json({ data: result }, { headers: noStoreHeaders() });
   } catch (error) {
     return errorResponse(error, "Không thể cập nhật học sinh lúc này.");
@@ -47,7 +56,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ s
     const actor = await getActor(request);
     if (actor.response) return actor.response;
     const classId = new URL(request.url).searchParams.get("classId");
-    const result = await archiveStudent({ classId }, (await params).studentId, actor.actorUserId!);
+    const studentId = (await params).studentId;
+    const result = await archiveStudent({ classId }, studentId, actor.actorUserId!);
+    revalidateStudentViews(studentId);
     return NextResponse.json({ data: result }, { headers: noStoreHeaders() });
   } catch (error) {
     return errorResponse(error, "Không thể lưu trữ học sinh lúc này.");

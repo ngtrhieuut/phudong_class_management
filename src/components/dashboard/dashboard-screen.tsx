@@ -16,6 +16,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { StudentCard } from "@/components/dashboard/student-card";
+import { AvatarImage } from "@/components/ui/avatar-template-picker";
 import type { DemoActivity, DemoBehavior, DemoPraise, DemoStudent } from "@/lib/demo-data";
 
 const activityIcons = {
@@ -210,8 +211,8 @@ export function DashboardScreen({
               <div className="mt-5 flex items-center gap-3">
                 <div className="flex -space-x-2">
                   {students.slice(0, 4).map((student) => (
-                    <span key={student.id} className={"flex h-11 w-11 items-center justify-center rounded-full border-2 border-white font-heading text-xs font-bold " + behaviorToneClasses[student.tone === "lilac" ? "blue" : student.tone]}>
-                      {student.shortName}
+                    <span key={student.id} className={"flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 border-white font-heading text-xs font-bold " + behaviorToneClasses[student.tone === "lilac" ? "blue" : student.tone]}>
+                      {student.avatarUrl ? <AvatarImage src={student.avatarUrl} alt="" size={44} className="h-full w-full rounded-full" /> : student.shortName}
                     </span>
                   ))}
                 </div>
@@ -294,6 +295,7 @@ export function DashboardScreen({
               <StudentCard
                 key={student.id}
                 student={student}
+                classId={classId}
                 onScore={(studentId) => openScore([studentId])}
                 onOpen={(studentId) => {
                   router.push("/teacher/students/" + studentId);

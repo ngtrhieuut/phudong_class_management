@@ -19,7 +19,7 @@ export function StudentCard({
   onOpen,
 }: {
   student: DemoStudent;
-  classId?: string;
+  classId: string | null;
   onScore: (studentId: string, direction: "positive" | "needs-improvement") => void;
   onOpen?: (studentId: string) => void;
 }) {

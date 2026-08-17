@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Check, CaretDown, SpinnerGap } from "@phosphor-icons/react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
@@ -199,6 +200,7 @@ export function StudentAvatarPicker({
   size?: number;
   onChanged?: (url: string) => void;
 }) {
+  const router = useRouter();
   const [avatarUrl, setAvatarUrl] = useState(value ?? null);
 
   useEffect(() => {
@@ -224,6 +226,7 @@ export function StudentAvatarPicker({
     setAvatarUrl(url);
     window.dispatchEvent(new CustomEvent("phudong:student-avatar-changed", { detail: { studentId, url } }));
     onChanged?.(url);
+    router.refresh();
   }
 
   return <AvatarTemplatePicker value={avatarUrl} gender={gender} fallback={fallback} size={size} onSelect={saveAvatar} />;
