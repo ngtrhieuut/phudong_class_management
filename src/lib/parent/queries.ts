@@ -82,6 +82,7 @@ export async function getParentChildData(userId: string, studentId: string) {
         eq(studentGuardians.canView, true),
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
+        eq(students.organizationId, classes.organizationId),
       ),
     )
     .orderBy(desc(schoolYears.active), asc(classes.name))

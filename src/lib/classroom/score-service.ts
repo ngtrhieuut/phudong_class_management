@@ -12,6 +12,7 @@ import {
   classStudents,
   scoreTransactions,
   studentScoreSnapshots,
+  students,
   users,
 } from "@/db/schema";
 import { calculateScoreDelta } from "@/lib/scoring";
@@ -149,11 +150,13 @@ export async function recordBehaviorScoreBatch(
       const members = await tx
         .select({ studentId: classStudents.studentId })
         .from(classStudents)
+        .innerJoin(students, eq(students.id, classStudents.studentId))
         .where(
           and(
             eq(classStudents.classId, parsed.data.classId),
             inArray(classStudents.studentId, studentIds),
             isNull(classStudents.leftAt),
+            eq(students.organizationId, classAccess.organizationId),
           ),
         );
 
@@ -351,11 +354,13 @@ export async function recordScoreAdjustment(
       const [member] = await tx
         .select({ studentId: classStudents.studentId })
         .from(classStudents)
+        .innerJoin(students, eq(students.id, classStudents.studentId))
         .where(
           and(
             eq(classStudents.classId, parsed.data.classId),
             eq(classStudents.studentId, parsed.data.studentId),
             isNull(classStudents.leftAt),
+            eq(students.organizationId, classAccess.organizationId),
           ),
         )
         .limit(1);

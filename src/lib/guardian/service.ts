@@ -72,6 +72,7 @@ async function assertActiveStudentInClass(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   classId: string,
   studentId: string,
+  organizationId: string,
 ) {
   const [student] = await tx
     .select({ id: students.id, fullName: students.fullName })
@@ -83,6 +84,7 @@ async function assertActiveStudentInClass(
         eq(classStudents.studentId, studentId),
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
+        eq(students.organizationId, organizationId),
       ),
     )
     .limit(1);
@@ -97,7 +99,7 @@ export async function linkGuardian(input: unknown, actorUserId: string) {
     const access = await getWritableClass(tx, actorUserId, parsed.data.classId);
     if (!access) throw new GuardianServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền quản lý phụ huynh của lớp này.");
 
-    const student = await assertActiveStudentInClass(tx, parsed.data.classId, parsed.data.studentId);
+    const student = await assertActiveStudentInClass(tx, parsed.data.classId, parsed.data.studentId, access.organizationId);
     if (!student) throw new GuardianServiceError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc lớp đang chọn.");
 
     const normalizedEmail = parsed.data.guardianEmail.toLowerCase();
@@ -187,7 +189,7 @@ export async function revokeGuardian(input: unknown, actorUserId: string) {
   return db.transaction(async (tx) => {
     const access = await getWritableClass(tx, actorUserId, parsed.data.classId);
     if (!access) throw new GuardianServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền quản lý phụ huynh của lớp này.");
-    const student = await assertActiveStudentInClass(tx, parsed.data.classId, parsed.data.studentId);
+    const student = await assertActiveStudentInClass(tx, parsed.data.classId, parsed.data.studentId, access.organizationId);
     if (!student) throw new GuardianServiceError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc lớp đang chọn.");
 
     const [relation] = await tx

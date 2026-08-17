@@ -40,7 +40,7 @@ export async function redeemReward(input: unknown, actorUserId: string) {
   return db.transaction(async (tx) => {
     const [access] = await tx.select({ organizationId: classes.organizationId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).innerJoin(classes, eq(classes.id, classMemberships.classId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, parsed.data.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"))).limit(1);
     if (!access) throw new RewardServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền đổi quà cho lớp này.");
-    const [member] = await tx.select({ studentId: classStudents.studentId }).from(classStudents).innerJoin(students, eq(students.id, classStudents.studentId)).where(and(eq(classStudents.classId, parsed.data.classId), eq(classStudents.studentId, parsed.data.studentId), isNull(classStudents.leftAt), eq(students.status, "active"))).limit(1);
+    const [member] = await tx.select({ studentId: classStudents.studentId }).from(classStudents).innerJoin(students, eq(students.id, classStudents.studentId)).where(and(eq(classStudents.classId, parsed.data.classId), eq(classStudents.studentId, parsed.data.studentId), isNull(classStudents.leftAt), eq(students.status, "active"), eq(students.organizationId, access.organizationId))).limit(1);
     if (!member) throw new RewardServiceError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc lớp này.");
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:reward:${parsed.data.classId}:${parsed.data.rewardId}`}, 0))`);
     const [reward] = await tx.select({ id: rewards.id, name: rewards.name, costStars: rewards.costStars, stock: rewards.stock }).from(rewards).where(and(eq(rewards.id, parsed.data.rewardId), eq(rewards.classId, parsed.data.classId), eq(rewards.active, true))).limit(1);
@@ -84,7 +84,8 @@ export async function transitionRewardRedemption(redemptionId: string, input: un
       .from(rewardRedemptions)
       .innerJoin(classes, eq(classes.id, rewardRedemptions.classId))
       .innerJoin(rewards, eq(rewards.id, rewardRedemptions.rewardId))
-      .where(eq(rewardRedemptions.id, parsedId.data))
+      .innerJoin(students, eq(students.id, rewardRedemptions.studentId))
+      .where(and(eq(rewardRedemptions.id, parsedId.data), eq(students.organizationId, classes.organizationId)))
       .limit(1);
     if (!redemption) throw new RewardServiceError("NOT_FOUND", "Không tìm thấy yêu cầu đổi quà.");
 

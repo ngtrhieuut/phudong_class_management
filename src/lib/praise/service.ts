@@ -73,6 +73,7 @@ export async function createPraisePost(input: unknown, authorUserId: string) {
           inArray(classStudents.studentId, parsed.data.studentIds),
           isNull(classStudents.leftAt),
           eq(students.status, "active"),
+          eq(students.organizationId, classAccess.organizationId),
         ),
       );
     if (memberRows.length !== parsed.data.studentIds.length) {

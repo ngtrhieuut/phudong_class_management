@@ -270,6 +270,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
         eq(users.status, "active"),
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
+        eq(students.organizationId, classes.organizationId),
       ),
     )
     .limit(1);
@@ -540,6 +541,7 @@ export async function getGuardianStudents(userId: string) {
         eq(studentGuardians.canView, true),
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
+        eq(students.organizationId, classes.organizationId),
       ),
     )
     .orderBy(asc(students.fullName));

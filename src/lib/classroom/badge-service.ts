@@ -66,6 +66,7 @@ export async function awardBadge(input: unknown, actorUserId: string) {
           eq(classStudents.studentId, parsed.data.studentId),
           isNull(classStudents.leftAt),
           eq(students.status, "active"),
+          eq(students.organizationId, access.organizationId),
         ),
       )
       .limit(1);
