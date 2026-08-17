@@ -255,7 +255,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
     schoolYearName: profile.schoolYearName,
   };
 
-  const [scores, badges, levels] = await Promise.all([
+  const [scores, badges, levels, weeklyTrend, monthlyTrend, behaviorBreakdown] = await Promise.all([
     db
       .select({
         id: scoreTransactions.id,
@@ -302,9 +302,54 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
       .from(levelDefinitions)
       .where(or(eq(levelDefinitions.classId, profile.classId), isNull(levelDefinitions.classId)))
       .orderBy(asc(levelDefinitions.sortOrder)),
+    db
+      .select({
+        period: sql<string>`to_char(date_trunc('week', ${scoreTransactions.occurredAt}), 'YYYY-MM-DD')`,
+        total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
+        events: sql<number>`count(${scoreTransactions.id})`,
+      })
+      .from(scoreTransactions)
+      .where(
+        and(
+          eq(scoreTransactions.classId, profile.classId),
+          eq(scoreTransactions.studentId, profile.id),
+          sql`${scoreTransactions.occurredAt} >= now() - interval '12 weeks'`,
+        ),
+      )
+      .groupBy(sql`date_trunc('week', ${scoreTransactions.occurredAt})`)
+      .orderBy(asc(sql`date_trunc('week', ${scoreTransactions.occurredAt})`)),
+    db
+      .select({
+        period: sql<string>`to_char(date_trunc('month', ${scoreTransactions.occurredAt}), 'YYYY-MM')`,
+        total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
+        events: sql<number>`count(${scoreTransactions.id})`,
+      })
+      .from(scoreTransactions)
+      .where(
+        and(
+          eq(scoreTransactions.classId, profile.classId),
+          eq(scoreTransactions.studentId, profile.id),
+          sql`${scoreTransactions.occurredAt} >= now() - interval '6 months'`,
+        ),
+      )
+      .groupBy(sql`date_trunc('month', ${scoreTransactions.occurredAt})`)
+      .orderBy(asc(sql`date_trunc('month', ${scoreTransactions.occurredAt})`)),
+    db
+      .select({
+        category: behaviorTemplates.category,
+        behaviorName: sql<string>`coalesce(${behaviorTemplates.name}, ${scoreTransactions.transactionType}::text)`,
+        total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
+        events: sql<number>`count(${scoreTransactions.id})`,
+      })
+      .from(scoreTransactions)
+      .leftJoin(behaviorTemplates, eq(behaviorTemplates.id, scoreTransactions.behaviorTemplateId))
+      .where(and(eq(scoreTransactions.classId, profile.classId), eq(scoreTransactions.studentId, profile.id)))
+      .groupBy(behaviorTemplates.category, behaviorTemplates.name, scoreTransactions.transactionType)
+      .orderBy(desc(sql`sum(${scoreTransactions.lifetimeDelta})`), desc(sql`count(${scoreTransactions.id})`))
+      .limit(20),
   ]);
 
-  return { classContext, profile, scores, badges, levels };
+  return { classContext, profile, scores, badges, levels, weeklyTrend, monthlyTrend, behaviorBreakdown };
 }
 
 export async function getTeacherDashboardData(

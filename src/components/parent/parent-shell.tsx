@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Bell, CaretDown, ChartLineUp, CheckCircle, House, Medal, Sparkle, UserCircle } from "@phosphor-icons/react/dist/ssr";
+import { getUserSession } from "@/lib/auth/server";
+import { getParentChildren } from "@/lib/parent/queries";
 
 const items = [
   { href: "/parent/today", label: "Hôm nay", Icon: House },
@@ -17,7 +19,12 @@ export function initials(name: string) {
   return `${parts[0].charAt(0)}${parts.at(-1)?.charAt(0) ?? ""}`.toUpperCase();
 }
 
-export function ParentShell({
+async function getShellChildren() {
+  const session = await getUserSession();
+  return session?.user ? getParentChildren(session.user.id) : [];
+}
+
+export async function ParentShell({
   active,
   childName,
   className,
@@ -32,13 +39,14 @@ export function ParentShell({
   childrenOptions?: readonly { studentId: string; fullName: string; className: string }[];
   children: ReactNode;
 }) {
+  const resolvedChildren = childrenOptions ?? await getShellChildren();
   return (
     <main className="min-h-[100dvh] bg-[var(--surface)] pb-24">
       <header className="sticky top-0 z-30 flex min-h-[72px] items-center justify-between border-b border-[var(--surface-high)] bg-[var(--surface)]/95 px-4 backdrop-blur md:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">{initials(childName)}</span>
           <div className="min-w-0"><Link href={`/parent/today?studentId=${studentId}`} className="block truncate font-heading text-lg font-bold text-[var(--primary)]">{childName}</Link><span className="block truncate font-body text-xs text-[var(--on-surface-variant)]">{className}</span></div>
-          {childrenOptions && childrenOptions.length > 1 ? <details className="relative"><summary aria-label="Đổi hồ sơ học sinh" className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full text-[var(--primary)] hover:bg-[var(--surface-container)]"><CaretDown size={18} /></summary><div className="absolute left-0 top-12 z-50 w-64 rounded-2xl border border-[var(--surface-high)] bg-[var(--surface-lowest)] p-2 shadow-xl">{childrenOptions.map((option) => <Link key={option.studentId} href={`/parent/today?studentId=${encodeURIComponent(option.studentId)}`} className="flex items-center justify-between rounded-xl px-3 py-3 hover:bg-[var(--surface-low)]"><span className="min-w-0"><span className="block truncate font-heading text-sm font-bold text-[var(--on-surface)]">{option.fullName}</span><span className="block truncate font-body text-xs text-[var(--on-surface-variant)]">{option.className}</span></span>{option.studentId === studentId ? <span className="text-xs font-bold text-[var(--positive)]">Đang xem</span> : null}</Link>)}</div></details> : null}
+          {resolvedChildren.length > 1 ? <details className="relative"><summary aria-label="Đổi hồ sơ học sinh" className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full text-[var(--primary)] hover:bg-[var(--surface-container)]"><CaretDown size={18} /></summary><div className="absolute left-0 top-12 z-50 w-64 rounded-2xl border border-[var(--surface-high)] bg-[var(--surface-lowest)] p-2 shadow-xl">{resolvedChildren.map((option) => <Link key={option.studentId} href={`/parent/today?studentId=${encodeURIComponent(option.studentId)}`} className="flex items-center justify-between rounded-xl px-3 py-3 hover:bg-[var(--surface-low)]"><span className="min-w-0"><span className="block truncate font-heading text-sm font-bold text-[var(--on-surface)]">{option.fullName}</span><span className="block truncate font-body text-xs text-[var(--on-surface-variant)]">{option.className}</span></span>{option.studentId === studentId ? <span className="text-xs font-bold text-[var(--positive)]">Đang xem</span> : null}</Link>)}</div></details> : null}
         </div>
         <div className="flex items-center gap-1"><Link href={`/parent/notifications?studentId=${studentId}`} aria-label="Thông báo" className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--primary)] transition hover:bg-[var(--surface-container)]"><Bell size={22} /></Link><Link href={`/parent/profile?studentId=${studentId}`} aria-label="Hồ sơ phụ huynh" className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--primary)] transition hover:bg-[var(--surface-container)]"><UserCircle size={24} weight="fill" /></Link></div>
       </header>

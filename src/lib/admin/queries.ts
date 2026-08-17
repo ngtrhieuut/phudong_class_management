@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { auditLogs, classes, classStudents, organizationMembers, organizations, users } from "@/db/schema";
+import { auditLogs, classes, classStudents, guardians, organizationMembers, organizations, studentGuardians, students, users } from "@/db/schema";
 
-export async function getAdminOverview(userId: string) {
+export async function getAdminOverview(userId: string, filters: { entityType?: string; action?: string } = {}) {
   const organizationsForUser = await db
     .select({ id: organizations.id, name: organizations.name, code: organizations.code })
     .from(organizationMembers)
@@ -12,10 +12,14 @@ export async function getAdminOverview(userId: string) {
     .where(and(eq(organizationMembers.userId, userId), eq(organizationMembers.role, "admin"), eq(users.status, "active")));
   if (organizationsForUser.length === 0) return null;
   const organizationIds = organizationsForUser.map((organization) => organization.id);
-  const [classRows, memberRows, auditRows] = await Promise.all([
+  const entityType = filters.entityType?.trim().slice(0, 100) || undefined;
+  const action = filters.action?.trim().slice(0, 100) || undefined;
+  const [classRows, memberRows, auditRows, studentTotal, guardianTotal] = await Promise.all([
     db.select({ id: classes.id, organizationId: classes.organizationId, name: classes.name, grade: classes.grade, schoolYearId: classes.schoolYearId, studentCount: sql<number>`count(distinct ${classStudents.studentId})` }).from(classes).leftJoin(classStudents, and(eq(classStudents.classId, classes.id), sql`${classStudents.leftAt} is null`)).where(inArray(classes.organizationId, organizationIds)).groupBy(classes.id).orderBy(asc(classes.name)),
     db.select({ userId: organizationMembers.userId, displayName: users.displayName, email: users.email, organizationId: organizationMembers.organizationId, role: organizationMembers.role }).from(organizationMembers).innerJoin(users, eq(users.id, organizationMembers.userId)).where(and(inArray(organizationMembers.organizationId, organizationIds), eq(users.status, "active"))).orderBy(asc(users.displayName)),
-    db.select({ id: auditLogs.id, entityType: auditLogs.entityType, action: auditLogs.action, createdAt: auditLogs.createdAt }).from(auditLogs).where(inArray(auditLogs.organizationId, organizationIds)).orderBy(desc(auditLogs.createdAt)).limit(50),
+    db.select({ id: auditLogs.id, entityType: auditLogs.entityType, entityId: auditLogs.entityId, action: auditLogs.action, actorName: users.displayName, createdAt: auditLogs.createdAt }).from(auditLogs).innerJoin(users, eq(users.id, auditLogs.actorUserId)).where(and(inArray(auditLogs.organizationId, organizationIds), entityType ? eq(auditLogs.entityType, entityType) : undefined, action ? eq(auditLogs.action, action) : undefined)).orderBy(desc(auditLogs.createdAt)).limit(50),
+    db.select({ total: sql<number>`count(distinct ${classStudents.studentId})` }).from(classes).innerJoin(classStudents, and(eq(classStudents.classId, classes.id), sql`${classStudents.leftAt} is null`)).where(inArray(classes.organizationId, organizationIds)),
+    db.select({ total: sql<number>`count(distinct ${guardians.id})` }).from(guardians).innerJoin(studentGuardians, eq(studentGuardians.guardianId, guardians.id)).innerJoin(students, eq(students.id, studentGuardians.studentId)).where(inArray(students.organizationId, organizationIds)),
   ]);
-  return { organizations: organizationsForUser, classes: classRows, members: memberRows, auditLogs: auditRows };
+  return { organizations: organizationsForUser, classes: classRows, members: memberRows, auditLogs: auditRows, studentCount: Number(studentTotal[0]?.total ?? 0), guardianCount: Number(guardianTotal[0]?.total ?? 0), filters: { entityType, action } };
 }
