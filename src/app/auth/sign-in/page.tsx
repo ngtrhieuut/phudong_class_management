@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ShieldCheck, Star } from "@phosphor-icons/react/dist/ssr";
+import { authConfigured } from "@/lib/auth/server";
 import { SignInForm } from "./sign-in-form";
 
 function safeCallbackPath(value: string | undefined) {
@@ -55,7 +56,17 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
                 Đăng nhập để mở dashboard lớp học của bạn.
               </p>
             </div>
-            <SignInForm callbackPath={callbackPath} />
+            {authConfigured ? (
+              <SignInForm callbackPath={callbackPath} />
+            ) : (
+              <div role="alert" className="rounded-2xl bg-[var(--needs-improvement-soft)] px-4 py-4 font-body text-sm leading-6 text-[var(--needs-improvement)]">
+                Authentication chưa được cấu hình cho môi trường này. Vui lòng bổ sung
+                <code className="mx-1 rounded bg-white/60 px-1">NEON_AUTH_BASE_URL</code>
+                và
+                <code className="mx-1 rounded bg-white/60 px-1">NEON_AUTH_COOKIE_SECRET</code>
+                trước khi đăng nhập.
+              </div>
+            )}
             <p className="mt-8 text-center font-body text-xs leading-5 text-[var(--on-surface-variant)]">
               Authentication đang dùng Managed Better Auth của Neon. Tài khoản và session không nằm trong client database.
             </p>

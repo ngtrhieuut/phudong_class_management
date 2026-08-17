@@ -574,7 +574,14 @@ export async function getGuardianStudentActivity(userId: string, studentId: stri
       occurredAt: scoreTransactions.occurredAt,
     })
     .from(scoreTransactions)
-    .where(eq(scoreTransactions.studentId, studentId))
+    .innerJoin(
+      classStudents,
+      and(
+        eq(classStudents.classId, scoreTransactions.classId),
+        eq(classStudents.studentId, scoreTransactions.studentId),
+      ),
+    )
+    .where(and(eq(scoreTransactions.studentId, studentId), isNull(classStudents.leftAt)))
     .orderBy(desc(scoreTransactions.occurredAt))
     .limit(50);
 }

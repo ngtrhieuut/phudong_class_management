@@ -172,6 +172,9 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
       .where(and(eq(classStudents.classId, parsed.data.classId), eq(classStudents.studentId, studentId), isNull(classStudents.leftAt)))
       .limit(1);
     if (!current) throw new StudentServiceError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc lớp này.");
+    if (current.organizationId !== access.organizationId) {
+      throw new StudentServiceError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc tổ chức của lớp này.");
+    }
 
     await assertSeatAvailable(tx, parsed.data.classId, parsed.data.seatNo, studentId);
     const nextCode = parsed.data.studentCode ?? current.studentCode;

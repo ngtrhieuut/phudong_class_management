@@ -1,19 +1,23 @@
 import { createNeonAuth } from "@neondatabase/auth/next/server";
 import { redirect } from "next/navigation";
 
-const baseUrl = process.env.NEON_AUTH_BASE_URL ?? "http://127.0.0.1:3999/auth";
-const cookieSecret =
-  process.env.NEON_AUTH_COOKIE_SECRET ??
-  "local-build-only-cookie-secret-change-before-use";
+import { hasValidAuthConfiguration } from "@/lib/auth/config";
 
-export const authConfigured = Boolean(
-  process.env.NEON_AUTH_BASE_URL && process.env.NEON_AUTH_COOKIE_SECRET,
-);
+const configuredBaseUrl = process.env.NEON_AUTH_BASE_URL?.trim();
+const configuredCookieSecret = process.env.NEON_AUTH_COOKIE_SECRET?.trim();
+
+export const authConfigured = hasValidAuthConfiguration(configuredBaseUrl, configuredCookieSecret);
+
+// The disabled values only satisfy the SDK constructor. Every public auth
+// entry point is guarded by `authConfigured`, so these values can never be
+// used to authenticate a request. The secret is intentionally ephemeral and
+// never predictable or shared between processes.
+const disabledAuthCookieSecret = `${globalThis.crypto.randomUUID()}${globalThis.crypto.randomUUID()}`;
 
 export const auth = createNeonAuth({
-  baseUrl,
+  baseUrl: configuredBaseUrl ?? "disabled://neon-auth",
   cookies: {
-    secret: cookieSecret,
+    secret: configuredCookieSecret ?? disabledAuthCookieSecret,
   },
   logLevel: authConfigured ? "warn" : "silent",
 });
