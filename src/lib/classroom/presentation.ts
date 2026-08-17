@@ -123,12 +123,6 @@ export function toDashboardPresentation(data: TeacherDashboardData): DashboardPr
     tone: behaviorTones[index % behaviorTones.length],
   }));
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const todayScore = data.recentScores
-    .filter((score) => new Date(score.occurredAt).getTime() >= startOfToday.getTime())
-    .reduce((total, score) => total + asNumber(score.lifetimeDelta), 0);
-
   return {
     students,
     activities,
@@ -136,7 +130,7 @@ export function toDashboardPresentation(data: TeacherDashboardData): DashboardPr
     behaviors,
     stats: {
       totalLifetimeScore: students.reduce((total, student) => total + student.points, 0),
-      todayScore,
+      todayScore: asNumber(data.todayScore),
       studentCount: students.length,
       recentActivityCount: data.recentScores.length,
     },

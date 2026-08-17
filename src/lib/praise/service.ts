@@ -94,7 +94,10 @@ export async function createPraisePost(input: unknown, authorUserId: string) {
       parsed.data.studentIds.map((studentId) => ({ postId: post.id, studentId })),
     );
 
-    if (parsed.data.visibility !== "teacher_only") {
+    // Parent feed and media are intentionally child-isolated. A multi-student
+    // post stays teacher-visible but must not create a parent notification that
+    // points to a post the parent cannot safely inspect.
+    if (parsed.data.visibility !== "teacher_only" && parsed.data.studentIds.length === 1) {
       const guardianRows = await tx
         .select({ userId: guardians.userId })
         .from(studentGuardians)

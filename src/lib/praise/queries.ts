@@ -1,4 +1,5 @@
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { aliasedTable } from "drizzle-orm/alias";
+import { and, desc, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -39,6 +40,7 @@ export async function getTeacherPraiseFeed(userId: string, classId?: string) {
 }
 
 export async function getParentPraisePosts(childStudentId: string) {
+  const otherPostStudents = aliasedTable(praisePostStudents, "other_parent_praise_post_students");
   return db
     .select({
       id: praisePosts.id,
@@ -53,7 +55,7 @@ export async function getParentPraisePosts(childStudentId: string) {
     .from(classStudents)
     .innerJoin(classes, eq(classes.id, classStudents.classId))
     .innerJoin(praisePosts, eq(praisePosts.classId, classStudents.classId))
-    .leftJoin(
+    .innerJoin(
       praisePostStudents,
       and(
         eq(praisePostStudents.postId, praisePosts.id),
@@ -66,9 +68,18 @@ export async function getParentPraisePosts(childStudentId: string) {
       and(
         eq(classStudents.studentId, childStudentId),
         isNull(classStudents.leftAt),
-        or(
-          eq(praisePosts.visibility, "class"),
-          and(eq(praisePosts.visibility, "related_guardians"), eq(praisePostStudents.studentId, childStudentId)),
+        eq(praisePostStudents.studentId, childStudentId),
+        inArray(praisePosts.visibility, ["class", "related_guardians"]),
+        notExists(
+          db
+            .select({ id: otherPostStudents.id })
+            .from(otherPostStudents)
+            .where(
+              and(
+                eq(otherPostStudents.postId, praisePosts.id),
+                sql`${otherPostStudents.studentId} <> ${childStudentId}`,
+              ),
+            ),
         ),
       ),
     )

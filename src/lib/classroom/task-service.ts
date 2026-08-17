@@ -58,7 +58,7 @@ async function notifyAssignedGuardians(tx: Parameters<Parameters<typeof db.trans
 }
 
 export class TaskServiceError extends Error {
-  constructor(public readonly code: "INVALID_INPUT" | "FORBIDDEN_CLASS_ACCESS" | "STUDENT_NOT_IN_CLASS" | "NOT_FOUND", message: string) {
+  constructor(public readonly code: "INVALID_INPUT" | "FORBIDDEN_CLASS_ACCESS" | "STUDENT_NOT_IN_CLASS" | "NOT_FOUND" | "INVALID_STATUS", message: string) {
     super(message);
     this.name = "TaskServiceError";
   }
@@ -85,15 +85,24 @@ export async function createClassTask(input: unknown, actorUserId: string) {
 
 export async function approveTaskAssignment(taskId: string, studentId: string, actorUserId: string) {
   return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:task:${taskId}:${studentId}`}, 0))`);
     const [assignment] = await tx.select({ assignmentId: taskAssignments.id, taskId: tasks.id, classId: tasks.classId, rewardStars: tasks.rewardStars, organizationId: classes.organizationId, currentStatus: taskAssignments.status }).from(taskAssignments).innerJoin(tasks, eq(tasks.id, taskAssignments.taskId)).innerJoin(classes, eq(classes.id, tasks.classId)).where(and(eq(taskAssignments.taskId, taskId), eq(taskAssignments.studentId, studentId))).limit(1);
     if (!assignment) throw new TaskServiceError("NOT_FOUND", "Không tìm thấy nhiệm vụ của học sinh.");
     const [access] = await tx.select({ userId: classMemberships.userId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, assignment.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"))).limit(1);
     if (!access) throw new TaskServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền duyệt nhiệm vụ này.");
     if (assignment.currentStatus === "completed") return { assignmentId: assignment.assignmentId, alreadyCompleted: true };
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:task:${assignment.taskId}:${studentId}`}, 0))`);
-    await tx.update(taskAssignments).set({ status: "completed", completedAt: new Date(), approvedBy: actorUserId, updatedAt: new Date() }).where(eq(taskAssignments.id, assignment.assignmentId));
+    if (assignment.currentStatus !== "pending") {
+      throw new TaskServiceError("INVALID_STATUS", "Nhiệm vụ không ở trạng thái chờ duyệt.");
+    }
+    const completedAt = new Date();
+    const [updatedAssignment] = await tx
+      .update(taskAssignments)
+      .set({ status: "completed", completedAt, approvedBy: actorUserId, updatedAt: completedAt })
+      .where(and(eq(taskAssignments.id, assignment.assignmentId), eq(taskAssignments.status, "pending")))
+      .returning({ id: taskAssignments.id });
+    if (!updatedAssignment) return { assignmentId: assignment.assignmentId, alreadyCompleted: true };
     if (assignment.rewardStars > 0) {
-      const occurredAt = new Date();
+      const occurredAt = completedAt;
       await tx.insert(scoreTransactions).values({ classId: assignment.classId, studentId, actorUserId, transactionType: "task", lifetimeDelta: assignment.rewardStars, spendableDelta: assignment.rewardStars, reason: `Hoàn thành nhiệm vụ: ${taskId}`, occurredAt });
       await tx.insert(studentScoreSnapshots).values({ classId: assignment.classId, studentId, lifetimeScore: assignment.rewardStars, spendableStars: assignment.rewardStars, updatedAt: occurredAt }).onConflictDoUpdate({ target: [studentScoreSnapshots.classId, studentScoreSnapshots.studentId], set: { lifetimeScore: sql`${studentScoreSnapshots.lifetimeScore} + ${assignment.rewardStars}`, spendableStars: sql`${studentScoreSnapshots.spendableStars} + ${assignment.rewardStars}`, updatedAt: occurredAt } });
     }

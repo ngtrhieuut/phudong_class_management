@@ -18,7 +18,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
     const result = await approveTaskAssignment(taskId, studentId, session.user.id);
     return NextResponse.json({ data: result }, { headers: noStoreHeaders() });
   } catch (error) {
-    if (error instanceof TaskServiceError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.code === "FORBIDDEN_CLASS_ACCESS" ? 403 : 422, headers: noStoreHeaders() });
+    if (error instanceof TaskServiceError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.code === "FORBIDDEN_CLASS_ACCESS" ? 403 : error.code === "INVALID_STATUS" ? 409 : 422, headers: noStoreHeaders() });
     return NextResponse.json({ error: "Không thể duyệt nhiệm vụ." }, { status: 500, headers: noStoreHeaders() });
   }
 }

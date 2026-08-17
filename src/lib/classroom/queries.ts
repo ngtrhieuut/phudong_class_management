@@ -3,6 +3,7 @@ import {
   asc,
   desc,
   eq,
+  gte,
   ilike,
   inArray,
   isNull,
@@ -11,6 +12,7 @@ import {
 } from "drizzle-orm";
 
 import { db } from "@/db";
+import { getVietnamDayRange } from "@/lib/time/vietnam";
 import {
   behaviorTemplates,
   badgeDefinitions,
@@ -63,6 +65,7 @@ export type ClassStudentRow = {
 export type TeacherDashboardData = {
   classContext: TeacherClassContext;
   students: ClassStudentRow[];
+  todayScore: number;
   behaviorTemplates: Array<{
     id: string;
     name: string;
@@ -391,7 +394,8 @@ export async function getTeacherDashboardData(
     return null;
   }
 
-  const [classStudentsData, behaviors, scores, praise, levels] = await Promise.all([
+  const { from: todayStart, to: tomorrowStart } = getVietnamDayRange();
+  const [classStudentsData, behaviors, scores, praise, levels, todayScoreRows] = await Promise.all([
     getClassStudents(userId, classContext.id, searchTerm),
     db
       .select({
@@ -463,11 +467,24 @@ export async function getTeacherDashboardData(
       .from(levelDefinitions)
       .where(or(eq(levelDefinitions.classId, classContext.id), isNull(levelDefinitions.classId)))
       .orderBy(asc(levelDefinitions.sortOrder)),
+    db
+      .select({
+        total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
+      })
+      .from(scoreTransactions)
+      .where(
+        and(
+          eq(scoreTransactions.classId, classContext.id),
+          gte(scoreTransactions.occurredAt, todayStart),
+          sql`${scoreTransactions.occurredAt} < ${tomorrowStart}`,
+        ),
+      ),
   ]);
 
   return {
     classContext,
     students: classStudentsData,
+    todayScore: Number(todayScoreRows[0]?.total ?? 0),
     behaviorTemplates: behaviors,
     recentScores: scores,
     praise,

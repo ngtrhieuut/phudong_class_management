@@ -1,5 +1,6 @@
 import { del } from "@vercel/blob";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { aliasedTable } from "drizzle-orm/alias";
+import { and, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -197,18 +198,28 @@ async function canAdminViewMedia(userId: string, organizationId: string) {
 
 async function canGuardianViewMedia(userId: string, target: NonNullable<Awaited<ReturnType<typeof getMediaTarget>>>) {
   if (target.visibility === "teacher_only") return false;
-  const visibilityCondition = target.visibility === "class" ? undefined : eq(praisePostStudents.postId, target.postId);
+  const otherPostStudents = aliasedTable(praisePostStudents, "other_guardian_praise_post_students");
   const [access] = await db
     .select({ id: studentGuardians.id })
-    .from(classStudents)
-    .innerJoin(studentGuardians, and(eq(studentGuardians.studentId, classStudents.studentId), eq(studentGuardians.canView, true)))
+    .from(praisePostStudents)
+    .innerJoin(classStudents, and(eq(classStudents.studentId, praisePostStudents.studentId), eq(classStudents.classId, target.classId)))
+    .innerJoin(studentGuardians, and(eq(studentGuardians.studentId, praisePostStudents.studentId), eq(studentGuardians.canView, true)))
     .innerJoin(guardians, and(eq(guardians.id, studentGuardians.guardianId), eq(guardians.userId, userId)))
-    .leftJoin(praisePostStudents, and(eq(praisePostStudents.postId, target.postId), eq(praisePostStudents.studentId, classStudents.studentId)))
     .where(
       and(
-        eq(classStudents.classId, target.classId),
+        eq(praisePostStudents.postId, target.postId),
         isNull(classStudents.leftAt),
-        visibilityCondition,
+        notExists(
+          db
+            .select({ id: otherPostStudents.id })
+            .from(otherPostStudents)
+            .where(
+              and(
+                eq(otherPostStudents.postId, target.postId),
+                sql`${otherPostStudents.studentId} <> ${praisePostStudents.studentId}`,
+              ),
+            ),
+        ),
       ),
     )
     .limit(1);

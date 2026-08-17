@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, ChartLineUp, CheckCircle, Gift, Notebook, Star, TrendUp, Trophy, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { ScoreAdjustmentForm } from "@/components/dashboard/score-adjustment-form";
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { requireUserSession } from "@/lib/auth/server";
 import { getTeacherClasses, getTeacherStudentProfile } from "@/lib/classroom/queries";
@@ -73,6 +74,19 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="flex items-center gap-2 font-heading text-xl font-bold text-[var(--on-surface)]"><Notebook size={21} className="text-[var(--primary)]" /> Hoạt động gần đây</h2><div className="mt-5 space-y-4">{scores.slice(0, 12).map((item) => <div key={item.id} className="flex gap-3"><span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-[var(--primary)]" /><div><p className="font-body text-sm text-[var(--on-surface)]">{item.reason}</p><p className="mt-1 font-body text-xs text-[var(--on-surface-variant)]">{new Date(item.occurredAt).toLocaleDateString("vi-VN")} · {item.lifetimeDelta > 0 ? `+${item.lifetimeDelta}` : item.spendableDelta} sao</p></div></div>)}{scores.length === 0 ? <p className="font-body text-sm text-[var(--on-surface-variant)]">Chưa có hoạt động.</p> : null}</div></div>
           <div className="rounded-[1.5rem] bg-[var(--surface-low)] p-6"><h2 className="flex items-center gap-2 font-heading text-xl font-bold text-[var(--primary)]"><Trophy size={21} weight="fill" /> Huy hiệu</h2><div className="mt-5 grid grid-cols-2 gap-3">{badges.map((badge) => <div key={badge.id} className="rounded-2xl bg-[var(--surface-lowest)] p-4 text-center shadow-sm"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--secondary-container)] text-[var(--secondary)]"><Star size={24} weight="fill" /></span><p className="mt-2 font-heading text-xs font-bold text-[var(--on-surface)]">{badge.name}</p></div>)}{badges.length === 0 ? <p className="col-span-2 font-body text-sm text-[var(--on-surface-variant)]">Chưa có huy hiệu.</p> : null}</div></div>
         </section>
+        <div className="mt-6">
+          <ScoreAdjustmentForm
+            classId={studentData.classContext.id}
+            studentId={profile.id}
+            sourceTransactions={scores.slice(0, 20).map((item) => ({
+              id: item.id,
+              reason: item.reason,
+              lifetimeDelta: Number(item.lifetimeDelta),
+              spendableDelta: Number(item.spendableDelta),
+              occurredAt: item.occurredAt.toISOString(),
+            }))}
+          />
+        </div>
       </div>
     </AppShell>
   );

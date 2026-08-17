@@ -22,6 +22,7 @@ import {
 } from "@/db/schema";
 import { getGuardianStudents } from "@/lib/classroom/queries";
 import { getParentPraisePosts } from "@/lib/praise/queries";
+import { getVietnamDayRange } from "@/lib/time/vietnam";
 
 export type ParentChild = Awaited<ReturnType<typeof getGuardianStudents>>[number];
 
@@ -86,7 +87,8 @@ export async function getParentChildData(userId: string, studentId: string) {
     .limit(1);
   if (!child) throw new Error("FORBIDDEN_STUDENT_ACCESS");
 
-  const [scores, tasksData, badges, levels, praise, guardianNotifications, redemptions] = await Promise.all([
+  const { from: todayStart, to: tomorrowStart } = getVietnamDayRange();
+  const [scores, tasksData, badges, levels, praise, guardianNotifications, redemptions, scoreTotalsRows] = await Promise.all([
     db
       .select({
         id: scoreTransactions.id,
@@ -166,9 +168,31 @@ export async function getParentChildData(userId: string, studentId: string) {
       .where(and(eq(rewardRedemptions.classId, child.classId), eq(rewardRedemptions.studentId, studentId)))
       .orderBy(desc(rewardRedemptions.requestedAt))
       .limit(50),
+    db
+      .select({
+        todayPositive: sql<number>`coalesce(sum(case when ${scoreTransactions.spendableDelta} > 0 and ${scoreTransactions.occurredAt} >= ${todayStart} and ${scoreTransactions.occurredAt} < ${tomorrowStart} then ${scoreTransactions.spendableDelta} else 0 end), 0)`,
+        positive: sql<number>`coalesce(sum(case when ${scoreTransactions.spendableDelta} > 0 then ${scoreTransactions.spendableDelta} else 0 end), 0)`,
+        improvements: sql<number>`coalesce(sum(case when ${scoreTransactions.spendableDelta} < 0 then abs(${scoreTransactions.spendableDelta}) else 0 end), 0)`,
+      })
+      .from(scoreTransactions)
+      .where(and(eq(scoreTransactions.classId, child.classId), eq(scoreTransactions.studentId, studentId))),
   ]);
 
-  return { child, scores, tasks: tasksData, badges, levels, praise, notifications: guardianNotifications, redemptions };
+  return {
+    child,
+    scores,
+    tasks: tasksData,
+    badges,
+    levels,
+    praise,
+    notifications: guardianNotifications,
+    redemptions,
+    scoreTotals: {
+      todayPositive: Number(scoreTotalsRows[0]?.todayPositive ?? 0),
+      positive: Number(scoreTotalsRows[0]?.positive ?? 0),
+      improvements: Number(scoreTotalsRows[0]?.improvements ?? 0),
+    },
+  };
 }
 
 export { assertGuardianChild };

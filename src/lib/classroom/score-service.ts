@@ -15,6 +15,7 @@ import {
   users,
 } from "@/db/schema";
 import { calculateScoreDelta } from "@/lib/scoring";
+import { getVietnamDayRange } from "@/lib/time/vietnam";
 
 const scoreBatchInputSchema = z.object({
   classId: z.string().uuid(),
@@ -24,7 +25,20 @@ const scoreBatchInputSchema = z.object({
   note: z.string().trim().max(2000).optional(),
 });
 
+const scoreAdjustmentInputSchema = z.object({
+  classId: z.string().uuid(),
+  studentId: z.string().uuid(),
+  sourceTransactionId: z.string().uuid(),
+  lifetimeDelta: z.number().int().min(-10000).max(10000),
+  spendableDelta: z.number().int().min(-10000).max(10000),
+  reason: z.string().trim().min(1).max(500),
+  note: z.string().trim().max(2000).optional(),
+}).refine((value) => value.lifetimeDelta !== 0 || value.spendableDelta !== 0, {
+  message: "Điều chỉnh phải thay đổi ít nhất một loại điểm.",
+});
+
 export type ScoreBatchInput = z.infer<typeof scoreBatchInputSchema>;
+export type ScoreAdjustmentInput = z.infer<typeof scoreAdjustmentInputSchema>;
 
 export class ScoreRecordingError extends Error {
   constructor(
@@ -33,6 +47,7 @@ export class ScoreRecordingError extends Error {
     | "FORBIDDEN_CLASS_ACCESS"
     | "STUDENT_NOT_IN_CLASS"
     | "BEHAVIOR_NOT_AVAILABLE"
+    | "SOURCE_TRANSACTION_NOT_FOUND"
     | "DAILY_LIMIT_REACHED"
     | "INSUFFICIENT_BALANCE"
     | "IDEMPOTENCY_CONFLICT",
@@ -58,6 +73,12 @@ function requestFingerprint(input: ScoreBatchInput): string {
         note: input.note ?? "",
       }),
     )
+    .digest("hex");
+}
+
+function adjustmentFingerprint(input: ScoreAdjustmentInput): string {
+  return createHash("sha256")
+    .update(JSON.stringify(input))
     .digest("hex");
 }
 
@@ -172,8 +193,7 @@ export async function recordBehaviorScoreBatch(
       const occurredAt = new Date();
 
       if (behavior.dailyLimit !== null) {
-        const todayStart = new Date(occurredAt);
-        todayStart.setHours(0, 0, 0, 0);
+        const { from: todayStart, to: tomorrowStart } = getVietnamDayRange(occurredAt);
         for (const studentId of studentIds) {
           const [{ count }] = await tx
             .select({ count: sql<number>`count(*)` })
@@ -184,6 +204,7 @@ export async function recordBehaviorScoreBatch(
                 eq(scoreTransactions.studentId, studentId),
                 eq(scoreTransactions.behaviorTemplateId, behavior.id),
                 gte(scoreTransactions.occurredAt, todayStart),
+                sql`${scoreTransactions.occurredAt} < ${tomorrowStart}`,
               ),
             );
           if (Number(count) >= behavior.dailyLimit) {
@@ -263,6 +284,204 @@ export async function recordBehaviorScoreBatch(
       (message.includes("non_negative") || message.includes("check"))
     ) {
       throw new ScoreRecordingError("INSUFFICIENT_BALANCE", "Số sao có thể đổi không đủ cho ghi nhận này.");
+    }
+    throw error;
+  }
+}
+
+export async function recordScoreAdjustment(
+  input: unknown,
+  actorUserId: string,
+  idempotencyKey: string,
+) {
+  const parsed = scoreAdjustmentInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ScoreRecordingError("INVALID_INPUT", "Dữ liệu điều chỉnh điểm không hợp lệ.");
+  }
+  if (!idempotencyKey.trim() || idempotencyKey.length > 128) {
+    throw new ScoreRecordingError("INVALID_INPUT", "Thiếu mã idempotency cho thao tác điều chỉnh.");
+  }
+
+  try {
+    return await db.transaction(async (tx) => {
+      const [classAccess] = await tx
+        .select({ classId: classes.id, organizationId: classes.organizationId })
+        .from(classMemberships)
+        .innerJoin(users, eq(users.id, classMemberships.userId))
+        .innerJoin(classes, eq(classes.id, classMemberships.classId))
+        .where(
+          and(
+            eq(classMemberships.userId, actorUserId),
+            eq(classMemberships.classId, parsed.data.classId),
+            inArray(classMemberships.role, ["homeroom_teacher", "teacher"]),
+            eq(users.status, "active"),
+          ),
+        )
+        .limit(1);
+
+      if (!classAccess) {
+        throw new ScoreRecordingError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền điều chỉnh điểm cho lớp này.");
+      }
+
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:score:${parsed.data.classId}`}, 0))`,
+      );
+
+      const fingerprint = adjustmentFingerprint(parsed.data);
+      const [previousAudit] = await tx
+        .select({ afterJson: auditLogs.afterJson })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.organizationId, classAccess.organizationId),
+            eq(auditLogs.entityType, "score_adjustment"),
+            eq(auditLogs.entityId, idempotencyKey),
+            eq(auditLogs.action, "created"),
+          ),
+        )
+        .limit(1);
+      if (previousAudit) {
+        const previous = previousAudit.afterJson as { requestFingerprint?: string; result?: unknown } | null;
+        if (previous?.requestFingerprint !== fingerprint || !previous.result) {
+          throw new ScoreRecordingError("IDEMPOTENCY_CONFLICT", "Mã idempotency đã được dùng cho dữ liệu khác.");
+        }
+        return previous.result;
+      }
+
+      const [member] = await tx
+        .select({ studentId: classStudents.studentId })
+        .from(classStudents)
+        .where(
+          and(
+            eq(classStudents.classId, parsed.data.classId),
+            eq(classStudents.studentId, parsed.data.studentId),
+            isNull(classStudents.leftAt),
+          ),
+        )
+        .limit(1);
+      if (!member) {
+        throw new ScoreRecordingError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc lớp này.");
+      }
+
+      const [sourceTransaction] = await tx
+        .select({ id: scoreTransactions.id })
+        .from(scoreTransactions)
+        .where(
+          and(
+            eq(scoreTransactions.id, parsed.data.sourceTransactionId),
+            eq(scoreTransactions.classId, parsed.data.classId),
+            eq(scoreTransactions.studentId, parsed.data.studentId),
+          ),
+        )
+        .limit(1);
+      if (!sourceTransaction) {
+        throw new ScoreRecordingError("SOURCE_TRANSACTION_NOT_FOUND", "Giao dịch gốc không thuộc học sinh/lớp này.");
+      }
+
+      const [snapshot] = await tx
+        .select({
+          id: studentScoreSnapshots.id,
+          lifetimeScore: studentScoreSnapshots.lifetimeScore,
+          spendableStars: studentScoreSnapshots.spendableStars,
+        })
+        .from(studentScoreSnapshots)
+        .where(
+          and(
+            eq(studentScoreSnapshots.classId, parsed.data.classId),
+            eq(studentScoreSnapshots.studentId, parsed.data.studentId),
+          ),
+        )
+        .limit(1);
+      const lifetimeScore = Number(snapshot?.lifetimeScore ?? 0);
+      const spendableStars = Number(snapshot?.spendableStars ?? 0);
+      if (
+        lifetimeScore + parsed.data.lifetimeDelta < 0 ||
+        spendableStars + parsed.data.spendableDelta < 0
+      ) {
+        throw new ScoreRecordingError("INSUFFICIENT_BALANCE", "Điều chỉnh sẽ làm số dư điểm bị âm.");
+      }
+
+      const occurredAt = new Date();
+      const [transaction] = await tx
+        .insert(scoreTransactions)
+        .values({
+          classId: parsed.data.classId,
+          studentId: parsed.data.studentId,
+          actorUserId,
+          transactionType: "adjustment",
+          lifetimeDelta: parsed.data.lifetimeDelta,
+          spendableDelta: parsed.data.spendableDelta,
+          reason: parsed.data.reason,
+          note: parsed.data.note || null,
+          sourceTransactionId: sourceTransaction.id,
+          occurredAt,
+        })
+        .returning({ id: scoreTransactions.id });
+
+      if (snapshot) {
+        const [updatedSnapshot] = await tx
+          .update(studentScoreSnapshots)
+          .set({
+            lifetimeScore: sql`${studentScoreSnapshots.lifetimeScore} + ${parsed.data.lifetimeDelta}`,
+            spendableStars: sql`${studentScoreSnapshots.spendableStars} + ${parsed.data.spendableDelta}`,
+            updatedAt: occurredAt,
+          })
+          .where(
+            and(
+              eq(studentScoreSnapshots.id, snapshot.id),
+              sql`${studentScoreSnapshots.lifetimeScore} + ${parsed.data.lifetimeDelta} >= 0`,
+              sql`${studentScoreSnapshots.spendableStars} + ${parsed.data.spendableDelta} >= 0`,
+            ),
+          )
+          .returning({ id: studentScoreSnapshots.id });
+        if (!updatedSnapshot) {
+          throw new ScoreRecordingError("INSUFFICIENT_BALANCE", "Điều chỉnh sẽ làm số dư điểm bị âm.");
+        }
+      } else {
+        await tx.insert(studentScoreSnapshots).values({
+          studentId: parsed.data.studentId,
+          classId: parsed.data.classId,
+          lifetimeScore: parsed.data.lifetimeDelta,
+          spendableStars: parsed.data.spendableDelta,
+          updatedAt: occurredAt,
+        });
+      }
+
+      const result = {
+        transactionId: transaction.id,
+        sourceTransactionId: sourceTransaction.id,
+        lifetimeDelta: parsed.data.lifetimeDelta,
+        spendableDelta: parsed.data.spendableDelta,
+      };
+      await tx.insert(auditLogs).values({
+        organizationId: classAccess.organizationId,
+        actorUserId,
+        entityType: "score_adjustment",
+        entityId: idempotencyKey,
+        action: "created",
+        afterJson: {
+          requestFingerprint: fingerprint,
+          classId: parsed.data.classId,
+          studentId: parsed.data.studentId,
+          sourceTransactionId: sourceTransaction.id,
+          lifetimeDelta: parsed.data.lifetimeDelta,
+          spendableDelta: parsed.data.spendableDelta,
+          result,
+        },
+      });
+
+      return result;
+    });
+  } catch (error) {
+    if (error instanceof ScoreRecordingError) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : "";
+    if (
+      message.includes("student_score_snapshots") &&
+      (message.includes("non_negative") || message.includes("check"))
+    ) {
+      throw new ScoreRecordingError("INSUFFICIENT_BALANCE", "Điều chỉnh sẽ làm số dư điểm bị âm.");
     }
     throw error;
   }

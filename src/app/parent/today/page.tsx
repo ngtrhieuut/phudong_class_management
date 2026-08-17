@@ -26,9 +26,7 @@ export default async function ParentTodayPage({ searchParams }: { searchParams: 
   const score = Number(data.child.lifetimeScore ?? 0);
   const spendable = Number(data.child.spendableStars ?? 0);
   const level = levelFor(score, data.levels);
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayPositive = data.scores.filter((item) => new Date(item.occurredAt).getTime() >= todayStart.getTime()).reduce((total, item) => total + Math.max(0, Number(item.spendableDelta)), 0);
+  const todayPositive = Number(data.scoreTotals.todayPositive ?? 0);
 
   return (
     <ParentShell active="Hôm nay" childName={data.child.fullName} className={data.child.className} studentId={studentId} childrenOptions={children}>
