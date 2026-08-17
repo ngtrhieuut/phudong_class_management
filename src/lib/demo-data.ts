@@ -5,6 +5,17 @@ export type DemoStudent = {
   shortName: string;
   group: string;
   classRole?: string;
+  classRoleId?: string | null;
+  avatarUrl?: string | null;
+  birthDate?: string | null;
+  gender?: "male" | "female" | "other" | "undisclosed" | null;
+  guardians?: Array<{
+    id: string;
+    fullName: string;
+    phone: string | null;
+    email: string | null;
+    relationship: string;
+  }>;
   points: number;
   spendableStars: number;
   level: string;

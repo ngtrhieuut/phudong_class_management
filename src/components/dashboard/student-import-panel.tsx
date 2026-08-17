@@ -19,6 +19,9 @@ type ImportRow = {
   birthDate?: string;
   group?: string;
   seatNumber?: number;
+  contactPhone?: string;
+  fatherName?: string;
+  motherName?: string;
 };
 
 type ImportResult = {
@@ -173,7 +176,7 @@ export function StudentImportPanel({ context }: { context: ImportContext }) {
           ) : (
             <div className="rounded-2xl bg-[var(--positive-soft)] p-4"><p className="flex items-center gap-2 font-heading text-sm font-bold text-[var(--positive)]"><CheckCircle size={18} weight="fill" /> Bản xem trước hợp lệ, không phát hiện lỗi nghiêm trọng.</p><p className="mt-1 font-body text-xs text-[var(--on-surface-variant)]">{result.summary.logMessage}</p></div>
           )}
-          {result.rows?.length ? <div className="overflow-x-auto rounded-2xl border border-[var(--surface-high)]"><table className="min-w-full text-left"><thead className="bg-[var(--surface-low)]"><tr>{["Dòng", "Mã học sinh", "Họ và tên", "Giới tính", "Ngày sinh", "Tổ", "Số ghế"].map((heading) => <th key={heading} className="px-3 py-3 font-heading text-xs font-bold text-[var(--on-surface-variant)]">{heading}</th>)}</tr></thead><tbody>{result.rows.slice(0, 12).map((row) => <tr key={row.rowNumber} className="border-t border-[var(--surface-high)]"><td className="px-3 py-3 font-body text-xs">{row.rowNumber}</td><td className="px-3 py-3 font-body text-sm">{row.studentCode}</td><td className="px-3 py-3 font-body text-sm">{row.fullName}</td><td className="px-3 py-3 font-body text-sm">{row.gender || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.birthDate || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.group || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.seatNumber || "—"}</td></tr>)}</tbody></table></div> : null}
+          {result.rows?.length ? <div className="overflow-x-auto rounded-2xl border border-[var(--surface-high)]"><table className="min-w-full text-left"><thead className="bg-[var(--surface-low)]"><tr>{["Dòng", "Mã học sinh", "Họ và tên", "Giới tính", "Ngày sinh", "Tổ", "Số ghế", "Điện thoại", "Tên cha", "Tên mẹ"].map((heading) => <th key={heading} className="px-3 py-3 font-heading text-xs font-bold text-[var(--on-surface-variant)]">{heading}</th>)}</tr></thead><tbody>{result.rows.slice(0, 12).map((row) => <tr key={row.rowNumber} className="border-t border-[var(--surface-high)]"><td className="px-3 py-3 font-body text-xs">{row.rowNumber}</td><td className="px-3 py-3 font-body text-sm">{row.studentCode}</td><td className="px-3 py-3 font-body text-sm">{row.fullName}</td><td className="px-3 py-3 font-body text-sm">{row.gender || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.birthDate || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.group || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.seatNumber || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.contactPhone || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.fatherName || "—"}</td><td className="px-3 py-3 font-body text-sm">{row.motherName || "—"}</td></tr>)}</tbody></table></div> : null}
           {result.summary.status === "ready" && result.mode === "dry-run" ? <button type="button" disabled={isCommitting} onClick={() => void runImport(true)} className="min-h-12 rounded-full bg-[var(--primary)] px-6 font-heading text-sm font-bold text-white disabled:opacity-50">{isCommitting ? "Đang ghi vào Neon..." : "Xác nhận nhập danh sách"}</button> : null}
           {result.mode === "committed" ? <p className="font-body text-sm text-[var(--positive)]">Đã hoàn tất import. Có thể tải lại trang danh sách để xem dữ liệu mới.</p> : null}
         </div>

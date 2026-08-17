@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TeacherNotificationsPage() {
   const session = await requireUserSession();
-  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image });
   const [notifications, classOptions] = await Promise.all([
     getTeacherNotifications(session.user.id),
     getTeacherClasses(session.user.id),
@@ -23,6 +23,7 @@ export default async function TeacherNotificationsPage() {
       selectedClassId={selectedClass?.id}
       classSwitcherPath="/teacher/notifications"
       teacherName={appUser.displayName}
+      teacherAvatarUrl={appUser.avatarUrl}
       className={selectedClass?.name}
       schoolYearName={selectedClass?.schoolYearName}
     >

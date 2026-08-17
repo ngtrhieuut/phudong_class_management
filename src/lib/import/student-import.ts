@@ -7,6 +7,9 @@ export type StudentImportField =
   | 'group'
   | 'classRole'
   | 'seatNumber'
+  | 'contactPhone'
+  | 'fatherName'
+  | 'motherName'
   | 'className'
   | 'classId';
 
@@ -31,6 +34,9 @@ export interface NormalizedStudentImportRow {
   birthDate?: string;
   group?: string;
   classRole?: string;
+  contactPhone?: string;
+  fatherName?: string;
+  motherName?: string;
   className?: string;
   classId?: string;
   upsertKeys: StudentUpsertKeys;
@@ -129,6 +135,9 @@ const HEADER_ALIASES: Readonly<Record<StudentImportField, readonly string[]>> = 
   group: ['tổ', 'nhóm', 'group', 'group name', 'group_name', 'team'],
   classRole: ['chức vụ', 'chức vụ lớp', 'vai trò lớp', 'class role', 'class_role', 'role'],
   seatNumber: ['số ghế', 'số chỗ', 'seat', 'seat no', 'seat number', 'seat_number'],
+  contactPhone: ['điện thoại', 'số điện thoại', 'phone', 'phone number', 'contact phone', 'contact_phone'],
+  fatherName: ['tên cha', 'họ tên cha', 'tên bố', 'họ tên bố', 'father name', 'father_name', 'parent father'],
+  motherName: ['tên mẹ', 'họ tên mẹ', 'mother name', 'mother_name', 'parent mother'],
   className: ['lớp', 'lớp học', 'class', 'class name', 'class_name'],
   classId: ['mã lớp', 'mã lớp học', 'class id', 'class_id'],
 };
@@ -578,6 +587,9 @@ export function buildStudentImportPlan(input: {
         birthDate: parsedBirthDate === 'invalid' ? undefined : parsedBirthDate,
         group: toText(readField(row, headers, normalizedHeaderResult.fields, 'group')),
         classRole: toText(readField(row, headers, normalizedHeaderResult.fields, 'classRole')),
+        contactPhone: toText(readField(row, headers, normalizedHeaderResult.fields, 'contactPhone')),
+        fatherName: toText(readField(row, headers, normalizedHeaderResult.fields, 'fatherName')),
+        motherName: toText(readField(row, headers, normalizedHeaderResult.fields, 'motherName')),
         className: classMatch.className,
         classId: classMatch.classId,
         upsertKeys: buildStudentUpsertKeys(input.context, studentCode),

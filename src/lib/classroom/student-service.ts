@@ -5,11 +5,13 @@ import { db } from "@/db";
 import {
   auditLogs,
   classes,
+  classRoles,
   classMemberships,
   classStudents,
   students,
   users,
 } from "@/db/schema";
+import { isAvatarPresetUrl } from "@/lib/avatar-presets";
 
 const writeRoles = ["homeroom_teacher", "teacher"] as const;
 const dateSchema = z
@@ -26,6 +28,8 @@ const studentFieldsSchema = z.object({
   fullName: z.string().trim().min(1).max(200),
   birthDate: dateSchema.nullable().optional(),
   gender: z.enum(["male", "female", "other", "undisclosed"]).nullable().optional(),
+  avatarUrl: z.string().trim().max(200).refine((value) => isAvatarPresetUrl(value), "Avatar không hợp lệ.").nullable().optional(),
+  classRoleId: z.string().uuid().nullable().optional(),
   seatNo: z.number().int().min(1).max(200).nullable().optional(),
   groupName: z.string().trim().max(100).nullable().optional(),
 });
@@ -45,6 +49,7 @@ export class StudentServiceError extends Error {
       | "STUDENT_NOT_IN_CLASS"
       | "DUPLICATE_CODE"
       | "SEAT_TAKEN"
+      | "CLASS_ROLE_NOT_FOUND"
       | "NOT_FOUND",
     message: string,
   ) {
@@ -111,6 +116,15 @@ export async function createStudent(input: unknown, actorUserId: string) {
     await lockClass(tx, parsed.data.classId);
     await assertSeatAvailable(tx, parsed.data.classId, parsed.data.seatNo);
 
+    if (parsed.data.classRoleId) {
+      const [role] = await tx
+        .select({ id: classRoles.id })
+        .from(classRoles)
+        .where(and(eq(classRoles.id, parsed.data.classRoleId), eq(classRoles.classId, parsed.data.classId)))
+        .limit(1);
+      if (!role) throw new StudentServiceError("CLASS_ROLE_NOT_FOUND", "Chức vụ lớp không tồn tại trong lớp này.");
+    }
+
     const [existingCode] = await tx
       .select({ id: students.id })
       .from(students)
@@ -128,6 +142,7 @@ export async function createStudent(input: unknown, actorUserId: string) {
         fullName: parsed.data.fullName,
         birthDate: parsed.data.birthDate ?? null,
         gender: parsed.data.gender ?? null,
+        avatarUrl: parsed.data.avatarUrl ?? null,
         status: "active",
       })
       .returning({ id: students.id, studentCode: students.studentCode, fullName: students.fullName });
@@ -136,6 +151,7 @@ export async function createStudent(input: unknown, actorUserId: string) {
       studentId: student.id,
       seatNo: parsed.data.seatNo ?? null,
       groupName: parsed.data.groupName ?? null,
+      classRoleId: parsed.data.classRoleId ?? null,
     });
     await tx.insert(auditLogs).values({
       organizationId: access.organizationId,
@@ -164,8 +180,10 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
         fullName: students.fullName,
         birthDate: students.birthDate,
         gender: students.gender,
+        avatarUrl: students.avatarUrl,
         seatNo: classStudents.seatNo,
         groupName: classStudents.groupName,
+        classRoleId: classStudents.classRoleId,
       })
       .from(classStudents)
       .innerJoin(students, eq(students.id, classStudents.studentId))
@@ -177,6 +195,18 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
     }
 
     await assertSeatAvailable(tx, parsed.data.classId, parsed.data.seatNo, studentId);
+    let nextClassRoleId = current.classRoleId;
+    if (parsed.data.classRoleId !== undefined) {
+      if (parsed.data.classRoleId) {
+        const [role] = await tx
+          .select({ id: classRoles.id })
+          .from(classRoles)
+          .where(and(eq(classRoles.id, parsed.data.classRoleId), eq(classRoles.classId, parsed.data.classId)))
+          .limit(1);
+        if (!role) throw new StudentServiceError("CLASS_ROLE_NOT_FOUND", "Chức vụ lớp không tồn tại trong lớp này.");
+      }
+      nextClassRoleId = parsed.data.classRoleId;
+    }
     const nextCode = parsed.data.studentCode ?? current.studentCode;
     if (nextCode !== current.studentCode) {
       const [existingCode] = await tx
@@ -192,6 +222,7 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
       fullName: parsed.data.fullName ?? current.fullName,
       ...(parsed.data.birthDate !== undefined ? { birthDate: parsed.data.birthDate } : {}),
       ...(parsed.data.gender !== undefined ? { gender: parsed.data.gender } : {}),
+      ...(parsed.data.avatarUrl !== undefined ? { avatarUrl: parsed.data.avatarUrl } : {}),
       updatedAt: new Date(),
     };
     await tx.update(students).set(studentValues).where(eq(students.id, studentId));
@@ -200,6 +231,7 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
       .set({
         seatNo: parsed.data.seatNo !== undefined ? parsed.data.seatNo : current.seatNo,
         groupName: parsed.data.groupName !== undefined ? parsed.data.groupName : current.groupName,
+        ...(parsed.data.classRoleId !== undefined ? { classRoleId: nextClassRoleId } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(classStudents.classId, parsed.data.classId), eq(classStudents.studentId, studentId)));
@@ -215,6 +247,7 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
         ...studentValues,
         seatNo: parsed.data.seatNo !== undefined ? parsed.data.seatNo : current.seatNo,
         groupName: parsed.data.groupName !== undefined ? parsed.data.groupName : current.groupName,
+        ...(parsed.data.classRoleId !== undefined ? { classRoleId: nextClassRoleId } : {}),
       },
     });
     return { id: studentId, ...studentValues };

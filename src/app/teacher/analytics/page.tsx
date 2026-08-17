@@ -31,7 +31,7 @@ export default async function TeacherAnalyticsPage({
   searchParams: Promise<AnalyticsSearchParams>;
 }) {
   const session = await requireUserSession();
-  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image });
   const params = await searchParams;
   const classId = params.classId;
   const [classContext, classOptions] = await Promise.all([
@@ -47,6 +47,7 @@ export default async function TeacherAnalyticsPage({
         selectedClassId={classId}
         classSwitcherPath="/teacher/analytics"
         teacherName={appUser.displayName}
+        teacherAvatarUrl={appUser.avatarUrl}
       >
         <div className="mx-auto max-w-3xl px-5 py-16 text-center">
           <h1 className="font-heading text-3xl font-bold text-[var(--primary)]">Chưa có lớp được phân công</h1>
@@ -86,6 +87,7 @@ export default async function TeacherAnalyticsPage({
       selectedClassId={classContext.id}
       classSwitcherPath="/teacher/analytics"
       teacherName={appUser.displayName}
+      teacherAvatarUrl={appUser.avatarUrl}
       className={classContext.name}
       schoolYearName={classContext.schoolYearName}
     >

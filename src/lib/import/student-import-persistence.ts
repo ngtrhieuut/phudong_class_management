@@ -8,7 +8,9 @@ import {
   classRoles,
   classStudents,
   classes,
+  guardians,
   schoolYears,
+  studentGuardians,
   students,
   users,
 } from "@/db/schema";
@@ -144,6 +146,107 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
     let updatedStudents = 0;
     let createdMemberships = 0;
     let updatedMemberships = 0;
+    let createdGuardians = 0;
+    let updatedGuardians = 0;
+    let createdGuardianLinks = 0;
+    let updatedGuardianLinks = 0;
+
+    async function upsertGuardian(studentId: string, fullName: string | undefined, relationship: string, phone: string | null) {
+      const normalizedName = fullName?.trim();
+      if (!normalizedName) return;
+
+      // A guardian has no organization_id of its own. Resolve an existing
+      // relation through the current organization's student graph first so a
+      // teacher import can never attach a user account from another tenant by
+      // matching only a common name/phone.
+      const [existingRelation] = await tx
+        .select({
+          linkId: studentGuardians.id,
+          guardianId: guardians.id,
+          guardianUserId: guardians.userId,
+        })
+        .from(studentGuardians)
+        .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+        .innerJoin(students, eq(students.id, studentGuardians.studentId))
+        .where(
+          and(
+            eq(studentGuardians.studentId, studentId),
+            eq(studentGuardians.relationship, relationship),
+            eq(students.organizationId, context.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (existingRelation) {
+        // Do not let a roster import rewrite an authenticated guardian's
+        // identity. Teacher-maintained contact fields are safe to update only
+        // for the local, not-yet-authenticated contact record.
+        if (!existingRelation.guardianUserId) {
+          await tx
+            .update(guardians)
+            .set({ fullName: normalizedName, phone, updatedAt: new Date() })
+            .where(eq(guardians.id, existingRelation.guardianId));
+          updatedGuardians += 1;
+        }
+        await tx
+          .update(studentGuardians)
+          .set({ relationship, updatedAt: new Date() })
+          .where(eq(studentGuardians.id, existingRelation.linkId));
+        updatedGuardianLinks += 1;
+        return;
+      }
+
+      const [existingGuardian] = await tx
+        .select({ id: guardians.id })
+        .from(guardians)
+        .innerJoin(studentGuardians, eq(studentGuardians.guardianId, guardians.id))
+        .innerJoin(students, eq(students.id, studentGuardians.studentId))
+        .where(
+          and(
+            eq(students.organizationId, context.organizationId),
+            eq(guardians.fullName, normalizedName),
+            phone ? eq(guardians.phone, phone) : isNull(guardians.phone),
+          ),
+        )
+        .limit(1);
+      let guardianId: string;
+      if (existingGuardian) {
+        guardianId = existingGuardian.id;
+        if (phone) {
+          await tx.update(guardians).set({ phone, updatedAt: new Date() }).where(eq(guardians.id, guardianId));
+        }
+        updatedGuardians += 1;
+      } else {
+        const [createdGuardian] = await tx
+          .insert(guardians)
+          .values({ fullName: normalizedName, phone })
+          .returning({ id: guardians.id });
+        guardianId = createdGuardian.id;
+        createdGuardians += 1;
+      }
+
+      const [existingLink] = await tx
+        .select({ id: studentGuardians.id })
+        .from(studentGuardians)
+        .where(and(eq(studentGuardians.studentId, studentId), eq(studentGuardians.guardianId, guardianId)))
+        .limit(1);
+      if (existingLink) {
+        await tx.update(studentGuardians).set({ relationship, updatedAt: new Date() }).where(eq(studentGuardians.id, existingLink.id));
+        updatedGuardianLinks += 1;
+      } else {
+        // Imported contacts are not authenticated relationships yet. Keep
+        // access disabled until the teacher explicitly links/invites the
+        // guardian account.
+        await tx.insert(studentGuardians).values({
+          studentId,
+          guardianId,
+          relationship,
+          canView: false,
+          receivesNotifications: false,
+        });
+        createdGuardianLinks += 1;
+      }
+    }
 
     for (const row of rows) {
       const existing = studentsByCode.get(row.studentCode);
@@ -248,6 +351,14 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
         });
         createdMemberships += 1;
       }
+
+      const contactPhone = row.contactPhone?.trim() || null;
+      await upsertGuardian(studentId, row.fatherName, "Cha", contactPhone);
+      // The source workbook contains one household contact column, not a
+      // separate father/mother phone. Keep the same contact number on both
+      // named parent records so it is searchable without claiming it is a
+      // personal number for only one parent.
+      await upsertGuardian(studentId, row.motherName, "Mẹ", contactPhone);
     }
 
     await tx.insert(auditLogs).values({
@@ -262,6 +373,10 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
         updatedStudents,
         createdMemberships,
         updatedMemberships,
+        createdGuardians,
+        updatedGuardians,
+        createdGuardianLinks,
+        updatedGuardianLinks,
       },
     });
 
@@ -272,6 +387,10 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
       updatedStudents,
       createdMemberships,
       updatedMemberships,
+      createdGuardians,
+      updatedGuardians,
+      createdGuardianLinks,
+      updatedGuardianLinks,
     };
   });
 }

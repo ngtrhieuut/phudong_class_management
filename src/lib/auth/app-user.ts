@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { isAvatarPresetUrl } from "@/lib/avatar-presets";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -9,6 +10,7 @@ export type AuthenticatedUser = {
   id: string;
   email?: string | null;
   name?: string | null;
+  image?: string | null;
 };
 
 /**
@@ -22,6 +24,8 @@ export async function ensureAppUser(authUser: AuthenticatedUser) {
 
   const displayName = authUser.name?.trim() || authUser.email?.trim() || "Người dùng Phù Đổng";
   const email = authUser.email?.trim().toLowerCase() || null;
+  const image = authUser.image === undefined ? undefined : authUser.image?.trim() || null;
+  const avatarUrl = image === null || (image && isAvatarPresetUrl(image)) ? image : undefined;
 
   const [user] = await db
     .insert(users)
@@ -29,6 +33,7 @@ export async function ensureAppUser(authUser: AuthenticatedUser) {
       id: authUser.id,
       email,
       displayName,
+      avatarUrl: avatarUrl ?? null,
       status: "active",
     })
     .onConflictDoUpdate({
@@ -36,6 +41,7 @@ export async function ensureAppUser(authUser: AuthenticatedUser) {
       set: {
         email,
         displayName,
+        ...(avatarUrl !== undefined ? { avatarUrl } : {}),
         updatedAt: new Date(),
       },
     })

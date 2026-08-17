@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChartBar, ClipboardText, Gear, Gift, House, Plus, Sparkle, UserCircle, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import { BrandMark } from "@/components/ui/brand-mark";
+import { AvatarImage } from "@/components/ui/avatar-template-picker";
 
 const items = [
   { href: "/teacher/dashboard", label: "Trang chủ", Icon: House },
@@ -19,7 +20,7 @@ function initials(name: string) {
   return `${parts[0][0]}${parts.at(-1)?.[0] ?? ""}`.toUpperCase();
 }
 
-export function Sidebar({ active, teacherName = "Tài khoản", className = "Chưa chọn lớp", schoolYearName = "Chưa thiết lập năm học" }: { active: string; teacherName?: string; className?: string; schoolYearName?: string }) {
+export function Sidebar({ active, teacherName = "Tài khoản", teacherAvatarUrl, className = "Chưa chọn lớp", schoolYearName = "Chưa thiết lập năm học" }: { active: string; teacherName?: string; teacherAvatarUrl?: string | null; className?: string; schoolYearName?: string }) {
   return (
     <aside className="hidden w-64 shrink-0 flex-col rounded-r-[2rem] bg-[var(--surface-low)] md:flex">
       <div className="border-b border-[var(--surface-high)] p-6">
@@ -56,13 +57,13 @@ export function Sidebar({ active, teacherName = "Tài khoản", className = "Ch�
         >
           <Plus size={20} weight="bold" /> Thêm học sinh
         </Link>
-        <div className="mt-4 flex items-center justify-between rounded-2xl bg-[var(--surface-lowest)] px-3 py-2">
+        <Link href="/teacher/settings" className="group mt-4 flex items-center justify-between rounded-2xl bg-[var(--surface-lowest)] px-3 py-2 transition hover:-translate-y-0.5 hover:bg-[var(--surface-container)] hover:shadow-md">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-fixed)] font-heading text-sm font-bold text-[var(--primary)]">{initials(teacherName)}</div>
+            {teacherAvatarUrl ? <AvatarImage src={teacherAvatarUrl} alt={`Avatar của ${teacherName}`} size={36} className="h-9 w-9 rounded-full" /> : <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-fixed)] font-heading text-sm font-bold text-[var(--primary)]">{initials(teacherName)}</div>}
             <span className="max-w-28 truncate font-heading text-xs font-bold text-[var(--on-surface)]">{teacherName}</span>
           </div>
-          <Gear size={18} className="text-[var(--on-surface-variant)]" />
-        </div>
+          <Gear size={18} className="text-[var(--on-surface-variant)] transition group-hover:text-[var(--primary)]" />
+        </Link>
       </div>
     </aside>
   );

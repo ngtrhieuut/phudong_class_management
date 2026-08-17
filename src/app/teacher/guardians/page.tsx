@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TeacherGuardiansPage({ searchParams }: { searchParams: Promise<{ classId?: string }> }) {
   const session = await requireUserSession();
-  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image });
   const classId = (await searchParams).classId;
   const [board, classOptions] = await Promise.all([
     getTeacherGuardianBoard(session.user.id, classId),
@@ -18,7 +18,7 @@ export default async function TeacherGuardiansPage({ searchParams }: { searchPar
 
   if (!board) {
     return (
-      <AppShell active="Phụ huynh" classOptions={classOptions} selectedClassId={classId} classSwitcherPath="/teacher/guardians" teacherName={appUser.displayName}>
+      <AppShell active="Phụ huynh" classOptions={classOptions} selectedClassId={classId} classSwitcherPath="/teacher/guardians" teacherName={appUser.displayName} teacherAvatarUrl={appUser.avatarUrl}>
         <div className="mx-auto max-w-3xl px-5 py-16 text-center">
           <h1 className="font-heading text-3xl font-bold text-[var(--primary)]">Chưa có lớp được phân công</h1>
           <p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">Hãy liên hệ quản trị viên để được gắn lớp.</p>
@@ -28,7 +28,7 @@ export default async function TeacherGuardiansPage({ searchParams }: { searchPar
   }
 
   return (
-    <AppShell active="Phụ huynh" classOptions={classOptions} selectedClassId={board.classContext.id} classSwitcherPath="/teacher/guardians" teacherName={appUser.displayName} className={board.classContext.name} schoolYearName={board.classContext.schoolYearName}>
+    <AppShell active="Phụ huynh" classOptions={classOptions} selectedClassId={board.classContext.id} classSwitcherPath="/teacher/guardians" teacherName={appUser.displayName} teacherAvatarUrl={appUser.avatarUrl} className={board.classContext.name} schoolYearName={board.classContext.schoolYearName}>
       <div className="mx-auto max-w-[1480px] px-5 py-7 sm:px-8 lg:px-10">
         <div className="mb-8">
           <p className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-[var(--tertiary)]">Đồng hành cùng gia đình</p>

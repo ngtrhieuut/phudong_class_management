@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { BadgeAwardForm } from "@/components/dashboard/badge-award-form";
 import { ScoreAdjustmentForm } from "@/components/dashboard/score-adjustment-form";
 import { StudentEditForm } from "@/components/dashboard/student-edit-form";
+import { StudentAvatarPicker } from "@/components/ui/avatar-template-picker";
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { requireUserSession } from "@/lib/auth/server";
 import { getTeacherClasses, getTeacherStudentProfile } from "@/lib/classroom/queries";
@@ -19,7 +20,7 @@ function formatPeriod(period: string, type: "week" | "month") {
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ studentId: string }> }) {
   const session = await requireUserSession();
-  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image });
   const { studentId } = await params;
   const [studentData, classOptions] = await Promise.all([
     getTeacherStudentProfile(session.user.id, studentId),
@@ -27,10 +28,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   ]);
 
   if (!studentData) {
-    return <AppShell active="Học sinh" classOptions={classOptions} classSwitcherPath="/teacher/students" teacherName={appUser.displayName}><div className="mx-auto max-w-3xl px-5 py-16 text-center"><Link href="/teacher/students" className="font-heading text-sm font-bold text-[var(--primary)] hover:underline">Quay lại danh sách</Link><h1 className="mt-5 font-heading text-3xl font-bold text-[var(--primary)]">Không tìm thấy học sinh</h1><p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">Học sinh không thuộc lớp bạn được phân công hoặc đã không còn hoạt động.</p></div></AppShell>;
+    return <AppShell active="Học sinh" classOptions={classOptions} classSwitcherPath="/teacher/students" teacherName={appUser.displayName} teacherAvatarUrl={appUser.avatarUrl}><div className="mx-auto max-w-3xl px-5 py-16 text-center"><Link href="/teacher/students" className="font-heading text-sm font-bold text-[var(--primary)] hover:underline">Quay lại danh sách</Link><h1 className="mt-5 font-heading text-3xl font-bold text-[var(--primary)]">Không tìm thấy học sinh</h1><p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">Học sinh không thuộc lớp bạn được phân công hoặc đã không còn hoạt động.</p></div></AppShell>;
   }
 
-  const { profile, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown } = studentData;
+  const { profile, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown, guardians, classRoles } = studentData;
   const level = [...levels].sort((a, b) => a.sortOrder - b.sortOrder).find((item) => Number(profile.lifetimeScore) >= item.minScore && (item.maxScore === null || Number(profile.lifetimeScore) <= item.maxScore));
   const weekly = weeklyTrend.map((item) => ({ ...item, total: Number(item.total), events: Number(item.events) }));
   const monthly = monthlyTrend.map((item) => ({ ...item, total: Number(item.total), events: Number(item.events) }));
@@ -39,14 +40,30 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   const areas = behaviorBreakdown.filter((item) => item.category === "needs_improvement" || Number(item.total) < 0).slice(0, 5);
 
   return (
-    <AppShell active="Học sinh" classOptions={classOptions} selectedClassId={studentData.classContext.id} classSwitcherPath="/teacher/students" teacherName={appUser.displayName} className={studentData.classContext.name} schoolYearName={studentData.classContext.schoolYearName}>
+    <AppShell active="Học sinh" classOptions={classOptions} selectedClassId={studentData.classContext.id} classSwitcherPath="/teacher/students" teacherName={appUser.displayName} teacherAvatarUrl={appUser.avatarUrl} className={studentData.classContext.name} schoolYearName={studentData.classContext.schoolYearName}>
       <div className="mx-auto max-w-6xl px-5 py-7 sm:px-8">
         <Link href={`/teacher/students?classId=${studentData.classContext.id}`} className="inline-flex min-h-11 items-center gap-2 font-heading text-sm font-bold text-[var(--primary)] hover:underline"><ArrowLeft size={18} weight="bold" /> Quay lại danh sách</Link>
         <section className="mt-5 overflow-hidden rounded-[2rem] bg-[var(--surface-lowest)] p-6 soft-shadow sm:p-8">
           <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-start sm:text-left">
-            <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-[2rem] bg-[var(--primary-fixed)] font-heading text-4xl font-bold text-[var(--primary)]">{profile.shortName || profile.fullName.slice(0, 2).toUpperCase()}</div>
+            <StudentAvatarPicker size={112} classId={studentData.classContext.id} studentId={profile.id} value={profile.avatarUrl} gender={profile.gender === "male" || profile.gender === "female" ? profile.gender : null} fallback={<span className="flex h-28 w-28 items-center justify-center rounded-[2rem] bg-[var(--primary-fixed)] font-heading text-4xl font-bold text-[var(--primary)]">{profile.shortName || profile.fullName.slice(0, 2).toUpperCase()}</span>} />
             <div className="flex-1"><p className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-[var(--tertiary)]">{profile.groupName || "Chưa phân tổ"} · {profile.studentCode}</p><h1 className="mt-2 font-heading text-4xl font-bold text-[var(--primary)]">{profile.fullName}</h1><p className="mt-2 font-body text-base text-[var(--on-surface-variant)]">Level {level?.sortOrder ?? "—"}: {level?.name ?? "Chưa thiết lập"}</p></div>
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary-container)] px-3 py-2 font-heading text-xs font-bold text-[var(--secondary)]"><Star size={16} weight="fill" /> {profile.spendableStars} sao</span>
+          </div>
+        </section>
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.15fr]">
+          <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow">
+            <h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Thông tin học sinh</h2>
+            <dl className="mt-5 grid grid-cols-2 gap-4">
+              <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Ngày sinh</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{profile.birthDate ? new Date(`${profile.birthDate}T00:00:00`).toLocaleDateString("vi-VN") : "Chưa cập nhật"}</dd></div>
+              <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Giới tính</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{profile.gender === "male" ? "Nam" : profile.gender === "female" ? "Nữ" : profile.gender === "other" ? "Khác" : "Chưa khai báo"}</dd></div>
+              <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Số thứ tự</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{profile.seatNo ?? "—"}</dd></div>
+              <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Chức vụ lớp</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--primary)]">{profile.classRoleName || "Chưa phân chức vụ"}</dd></div>
+            </dl>
+          </div>
+          <div className="rounded-[1.5rem] bg-[var(--surface-low)] p-6">
+            <div className="flex items-center justify-between gap-3"><div><h2 className="font-heading text-xl font-bold text-[var(--primary)]">Phụ huynh / người giám hộ</h2><p className="mt-1 font-body text-sm text-[var(--on-surface-variant)]">Thông tin được lấy từ danh sách Excel của lớp.</p></div><span className="rounded-full bg-[var(--surface-lowest)] px-3 py-1 font-heading text-xs font-bold text-[var(--primary)]">{guardians.length} liên hệ</span></div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">{guardians.map((guardian) => <article key={guardian.id} className="rounded-2xl bg-[var(--surface-lowest)] p-4 transition hover:-translate-y-0.5 hover:shadow-md"><p className="font-heading text-sm font-bold text-[var(--on-surface)]">{guardian.fullName}</p><p className="mt-1 font-body text-xs text-[var(--tertiary)]">{guardian.relationship}</p>{guardian.phone ? <p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">☎ Điện thoại liên hệ: {guardian.phone}</p> : <p className="mt-3 font-body text-sm text-[var(--outline)]">Chưa có điện thoại liên hệ</p>}{guardian.email ? <p className="mt-1 truncate font-body text-xs text-[var(--on-surface-variant)]">{guardian.email}</p> : null}</article>)}{guardians.length === 0 ? <p className="sm:col-span-2 rounded-2xl border border-dashed border-[var(--outline-variant)] p-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có dữ liệu phụ huynh. Có thể nhập lại file Excel ở mục Nhập danh sách.</p> : null}</div>
           </div>
         </section>
 
@@ -87,7 +104,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
               gender: profile.gender,
               seatNo: profile.seatNo,
               groupName: profile.groupName,
+              avatarUrl: profile.avatarUrl,
+              classRoleId: profile.classRoleId,
             }}
+            classRoles={classRoles}
           />
         </div>
         <div className="mt-6">

@@ -48,6 +48,27 @@ describe('student import normalization and dry-run planning', () => {
     expect(plan.summary.piiSafe).toBe(true);
   });
 
+  it('keeps parent names and the household contact phone in the normalized plan', () => {
+    const plan = buildStudentImportPlan({
+      context,
+      headers: ['Mã học sinh', 'Họ và tên', 'Điện thoại', 'Tên cha', 'Tên mẹ'],
+      rows: [{
+        'Mã học sinh': 'HS-002',
+        'Họ và tên': 'Trần Bình',
+        'Điện thoại': '0901 234 567',
+        'Tên cha': 'Trần Văn Bình',
+        'Tên mẹ': 'Nguyễn Thị Hoa',
+      }],
+    });
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.normalizedRows[0]).toMatchObject({
+      contactPhone: '0901 234 567',
+      fatherName: 'Trần Văn Bình',
+      motherName: 'Nguyễn Thị Hoa',
+    });
+  });
+
   it('maps Vietnamese and English header aliases to the same fields', () => {
     expect(normalizeStudentImportHeader('SỐ THỨ TỰ')).toBe('stt');
     expect(normalizeStudentImportHeader('Student Code')).toBe('studentCode');

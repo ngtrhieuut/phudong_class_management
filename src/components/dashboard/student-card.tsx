@@ -2,6 +2,7 @@
 
 import { ArrowUpRight, CheckCircle, Minus, Plus, Star } from "@phosphor-icons/react";
 import type { DemoStudent } from "@/lib/demo-data";
+import { StudentAvatarPicker } from "@/components/ui/avatar-template-picker";
 
 const toneClasses: Record<DemoStudent["tone"], string> = {
   gold: "bg-[#ffe68a] text-[#705d00]",
@@ -13,28 +14,41 @@ const toneClasses: Record<DemoStudent["tone"], string> = {
 
 export function StudentCard({
   student,
+  classId,
   onScore,
   onOpen,
 }: {
   student: DemoStudent;
+  classId?: string;
   onScore: (studentId: string, direction: "positive" | "needs-improvement") => void;
   onOpen?: (studentId: string) => void;
 }) {
   return (
     <article className="soft-shadow-hover rounded-[1.5rem] border border-white/80 bg-[var(--surface-lowest)] p-4 soft-shadow">
       <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={() => onOpen?.(student.id)}
-          className={"flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl font-heading text-lg font-bold transition active:scale-95 " + toneClasses[student.tone]}
-          aria-label={"Mở hồ sơ " + student.name}
-        >
-          {student.shortName}
-        </button>
+        {classId ? (
+          <StudentAvatarPicker
+            classId={classId}
+            studentId={student.id}
+            value={student.avatarUrl}
+            gender={student.gender === "male" || student.gender === "female" ? student.gender : null}
+            fallback={<span className={"flex h-16 w-16 items-center justify-center rounded-[1.25rem] font-heading text-lg font-bold " + toneClasses[student.tone]}>{student.shortName}</span>}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onOpen?.(student.id)}
+            className={"flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl font-heading text-lg font-bold transition hover:-translate-y-0.5 hover:shadow-md active:scale-95 " + toneClasses[student.tone]}
+            aria-label={"Mở hồ sơ " + student.name}
+          >
+            {student.shortName}
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <button type="button" onClick={() => onOpen?.(student.id)} className="text-left">
             <p className="truncate font-heading text-base font-bold text-[var(--on-surface)]">{student.name}</p>
             <p className="mt-0.5 truncate font-body text-xs text-[var(--on-surface-variant)]">{student.group}{student.classRole ? ` · ${student.classRole}` : ""}</p>
+            {student.guardians?.length ? <p className="mt-1 truncate font-body text-[11px] text-[var(--outline)]">PH: {student.guardians.map((guardian) => guardian.fullName).join(" · ")}</p> : null}
           </button>
           <div className="mt-2 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary-container)]/30 px-2 py-1 font-heading text-[11px] font-bold text-[var(--secondary)]">

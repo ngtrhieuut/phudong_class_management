@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Eye, EyeSlash, SpinnerGap } from "@phosphor-icons/react";
 import { authClient } from "@/lib/auth/client";
@@ -76,6 +77,14 @@ export function SignInForm({ callbackPath = "/teacher/dashboard" }: { callbackPa
           </button>
         </span>
       </label>
+      <div className="-mt-2 text-right">
+        <Link
+          href="/auth/forgot-password"
+          className="font-heading text-sm font-bold text-[var(--primary)] underline decoration-[var(--primary-fixed)] underline-offset-4 transition hover:text-[var(--primary-container)]"
+        >
+          Quên mật khẩu?
+        </Link>
+      </div>
       {error ? (
         <p role="alert" className="rounded-2xl bg-[var(--needs-improvement-soft)] px-4 py-3 font-body text-sm leading-5 text-[var(--needs-improvement)]">
           {error}

@@ -13,6 +13,7 @@ export default async function TeacherDashboardPage({ searchParams }: { searchPar
     id: session.user.id,
     email: session.user.email,
     name: session.user.name,
+    image: session.user.image,
   });
   const params = await searchParams;
   const classId = params.classId;
@@ -22,7 +23,7 @@ export default async function TeacherDashboardPage({ searchParams }: { searchPar
   ]);
 
   return (
-    <AppShell active="Trang chủ" classOptions={classOptions} selectedClassId={dashboard?.classContext.id ?? classId} teacherName={appUser.displayName} className={dashboard?.classContext.name} schoolYearName={dashboard?.classContext.schoolYearName}>
+    <AppShell active="Trang chủ" classOptions={classOptions} selectedClassId={dashboard?.classContext.id ?? classId} teacherName={appUser.displayName} teacherAvatarUrl={appUser.avatarUrl} className={dashboard?.classContext.name} schoolYearName={dashboard?.classContext.schoolYearName}>
       {dashboard ? (
         <DashboardScreen
           teacherName={appUser.displayName}

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StudentImportPage({ searchParams }: { searchParams: Promise<{ classId?: string }> }) {
   const session = await requireUserSession();
-  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image });
   const classId = (await searchParams).classId;
   const [classContext, classOptions] = await Promise.all([
     getTeacherClass(session.user.id, classId),
@@ -18,7 +18,7 @@ export default async function StudentImportPage({ searchParams }: { searchParams
   ]);
 
   return (
-    <AppShell active="Học sinh" classOptions={classOptions} selectedClassId={classContext?.id ?? classId} classSwitcherPath="/teacher/students/import" teacherName={appUser.displayName} className={classContext?.name} schoolYearName={classContext?.schoolYearName}>
+    <AppShell active="Học sinh" classOptions={classOptions} selectedClassId={classContext?.id ?? classId} classSwitcherPath="/teacher/students/import" teacherName={appUser.displayName} teacherAvatarUrl={appUser.avatarUrl} className={classContext?.name} schoolYearName={classContext?.schoolYearName}>
       <div className="mx-auto max-w-[1480px] px-5 py-7 sm:px-8 lg:px-10">
         <Link href={classContext ? `/teacher/students?classId=${classContext.id}` : "/teacher/students"} className="inline-flex min-h-11 items-center font-heading text-sm font-bold text-[var(--primary)] hover:underline">← Quay lại danh sách</Link>
         {classContext ? (

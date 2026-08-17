@@ -47,16 +47,27 @@ export type TeacherClassContext = {
   schoolYearName: string;
 };
 
+export type ClassStudentGuardianRow = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  relationship: string;
+};
+
 export type ClassStudentRow = {
   id: string;
   studentCode: string;
   fullName: string;
   shortName: string | null;
+  avatarUrl?: string | null;
   birthDate: string | null;
   gender: "male" | "female" | "other" | "undisclosed" | null;
   seatNo: number | null;
   groupName: string | null;
+  classRoleId?: string | null;
   classRoleName: string | null;
+  guardians?: ClassStudentGuardianRow[];
   taskStatus: "completed" | "in_progress" | "not_started";
   lifetimeScore: number;
   spendableStars: number;
@@ -167,6 +178,17 @@ export async function getClassStudents(
         ilike(students.fullName, `%${normalizedSearch}%`),
         ilike(students.studentCode, `%${normalizedSearch}%`),
         ilike(classStudents.groupName, `%${normalizedSearch}%`),
+        sql`exists (
+          select 1
+          from ${studentGuardians} as sg
+          inner join ${guardians} as g on g.id = sg.guardian_id
+          where sg.student_id = ${students.id}
+            and (
+              g.full_name ilike ${`%${normalizedSearch}%`}
+              or coalesce(g.phone, '') ilike ${`%${normalizedSearch}%`}
+              or coalesce(g.email, '') ilike ${`%${normalizedSearch}%`}
+            )
+        )`,
       )
     : undefined;
 
@@ -177,10 +199,12 @@ export async function getClassStudents(
         studentCode: students.studentCode,
         fullName: students.fullName,
         shortName: students.shortName,
+        avatarUrl: students.avatarUrl,
         birthDate: students.birthDate,
         gender: students.gender,
         seatNo: classStudents.seatNo,
         groupName: classStudents.groupName,
+        classRoleId: classStudents.classRoleId,
         classRoleName: classRoles.name,
         lifetimeScore: sql<number>`coalesce(${studentScoreSnapshots.lifetimeScore}, 0)`,
         spendableStars: sql<number>`coalesce(${studentScoreSnapshots.spendableStars}, 0)`,
@@ -222,9 +246,32 @@ export async function getClassStudents(
       .groupBy(taskAssignments.studentId),
   ]);
 
+  const guardianRows = studentRows.length
+    ? await db
+        .select({
+          studentId: studentGuardians.studentId,
+          id: guardians.id,
+          fullName: guardians.fullName,
+          phone: guardians.phone,
+          email: guardians.email,
+          relationship: studentGuardians.relationship,
+        })
+        .from(studentGuardians)
+        .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+        .where(inArray(studentGuardians.studentId, studentRows.map((student) => student.id)))
+        .orderBy(asc(studentGuardians.studentId), asc(guardians.fullName))
+    : [];
+  const guardiansByStudent = new Map<string, ClassStudentGuardianRow[]>();
+  for (const guardian of guardianRows) {
+    const list = guardiansByStudent.get(guardian.studentId) ?? [];
+    list.push({ id: guardian.id, fullName: guardian.fullName, phone: guardian.phone, email: guardian.email, relationship: guardian.relationship });
+    guardiansByStudent.set(guardian.studentId, list);
+  }
+
   const taskStatusByStudent = new Map(taskStatusRows.map((row) => [row.studentId, row.taskStatus]));
   return studentRows.map((student) => ({
     ...student,
+    guardians: guardiansByStudent.get(student.id) ?? [],
     taskStatus: taskStatusByStudent.get(student.id) ?? "not_started",
   }));
 }
@@ -239,10 +286,13 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
       studentCode: students.studentCode,
       fullName: students.fullName,
       shortName: students.shortName,
+      avatarUrl: students.avatarUrl,
       birthDate: students.birthDate,
       gender: students.gender,
       seatNo: classStudents.seatNo,
       groupName: classStudents.groupName,
+      classRoleId: classStudents.classRoleId,
+      classRoleName: classRoles.name,
       classId: classStudents.classId,
       className: classes.name,
       schoolYearName: schoolYears.name,
@@ -255,6 +305,10 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
     .innerJoin(students, eq(students.id, classStudents.studentId))
     .innerJoin(classes, eq(classes.id, classStudents.classId))
     .innerJoin(schoolYears, eq(schoolYears.id, classes.schoolYearId))
+    .leftJoin(
+      classRoles,
+      and(eq(classRoles.id, classStudents.classRoleId), eq(classRoles.classId, classStudents.classId)),
+    )
     .leftJoin(
       studentScoreSnapshots,
       and(
@@ -288,7 +342,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
     schoolYearName: profile.schoolYearName,
   };
 
-  const [scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown] = await Promise.all([
+  const [scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown, guardianRows, classRoleOptions] = await Promise.all([
     db
       .select({
         id: scoreTransactions.id,
@@ -394,9 +448,26 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
       .groupBy(behaviorTemplates.category, behaviorTemplates.name, scoreTransactions.transactionType)
       .orderBy(desc(sql`sum(${scoreTransactions.lifetimeDelta})`), desc(sql`count(${scoreTransactions.id})`))
       .limit(20),
+    db
+      .select({
+        id: guardians.id,
+        fullName: guardians.fullName,
+        phone: guardians.phone,
+        email: guardians.email,
+        relationship: studentGuardians.relationship,
+      })
+      .from(studentGuardians)
+      .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+      .where(eq(studentGuardians.studentId, profile.id))
+      .orderBy(asc(studentGuardians.relationship), asc(guardians.fullName)),
+    db
+      .select({ id: classRoles.id, name: classRoles.name, icon: classRoles.icon, description: classRoles.description })
+      .from(classRoles)
+      .where(eq(classRoles.classId, profile.classId))
+      .orderBy(asc(classRoles.sortOrder), asc(classRoles.name)),
   ]);
 
-  return { classContext, profile, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown };
+  return { classContext, profile, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown, guardians: guardianRows, classRoles: classRoleOptions };
 }
 
 export async function getTeacherDashboardData(

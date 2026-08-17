@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChartBar, ClipboardText, House, Plus, Sparkle, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { ChartBar, ClipboardText, Gear, House, Plus, Sparkle, UsersThree } from "@phosphor-icons/react/dist/ssr";
 
 const items = [
   { href: "/teacher/dashboard", label: "Trang chủ", Icon: House },
@@ -8,6 +8,7 @@ const items = [
   { href: "/teacher/praise", label: "Tuyên dương", Icon: Sparkle },
   { href: "/teacher/tasks", label: "Nhiệm vụ", Icon: ClipboardText },
   { href: "/teacher/analytics", label: "Thống kê", Icon: ChartBar },
+  { href: "/teacher/settings", label: "Cài đặt", Icon: Gear },
 ];
 
 export function MobileNav({ active }: { active: string }) {
