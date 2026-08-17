@@ -1,7 +1,14 @@
 import { Bell, CaretDown, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import { BrandMark } from "@/components/ui/brand-mark";
 
-export function TopBar() {
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts.at(-1)?.[0] ?? ""}`.toUpperCase();
+}
+
+export function TopBar({ teacherName = "Tài khoản" }: { teacherName?: string }) {
   return (
     <header className="sticky top-0 z-30 flex min-h-[72px] items-center justify-between gap-4 border-b border-[var(--surface-high)] bg-[var(--surface)]/95 px-5 backdrop-blur sm:px-8">
       <div className="md:hidden">
@@ -23,8 +30,8 @@ export function TopBar() {
         </button>
         <div className="hidden h-8 w-px bg-[var(--outline-variant)]/60 sm:block" />
         <button className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--outline-variant)]/50 bg-[var(--surface-lowest)] p-1 pr-3 transition hover:border-[var(--primary)]">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">M</span>
-          <span className="hidden font-heading text-sm font-bold text-[var(--on-surface)] sm:block">Cô Mai</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">{initials(teacherName)}</span>
+          <span className="hidden max-w-32 truncate font-heading text-sm font-bold text-[var(--on-surface)] sm:block">{teacherName}</span>
           <CaretDown size={16} className="text-[var(--on-surface-variant)]" />
         </button>
       </div>

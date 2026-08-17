@@ -15,9 +15,9 @@ import {
 
 const importRequestSchema = z.object({
   context: z.object({
-    organizationId: z.string().trim().min(1),
-    schoolYearId: z.string().trim().min(1),
-    classId: z.string().trim().min(1),
+    organizationId: z.string().uuid(),
+    schoolYearId: z.string().uuid(),
+    classId: z.string().uuid(),
     className: z.string().trim().max(200).optional(),
   }),
   headers: z.array(z.string().max(200)).max(100).optional(),
@@ -27,6 +27,30 @@ const importRequestSchema = z.object({
 
 export const dynamic = "force-dynamic";
 
+const MAX_IMPORT_BODY_BYTES = 5 * 1024 * 1024;
+
+function assertSameOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+    const configuredUrl = process.env.NEXT_PUBLIC_APP_URL
+      ? new URL(process.env.NEXT_PUBLIC_APP_URL)
+      : null;
+    return originUrl.origin === requestUrl.origin || originUrl.origin === configuredUrl?.origin;
+  } catch {
+    return false;
+  }
+}
+
+function jsonResponse(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
 export async function POST(request: Request) {
   if (!authConfigured) {
     return NextResponse.json({ error: "Authentication is not configured." }, { status: 503 });
@@ -34,12 +58,32 @@ export async function POST(request: Request) {
 
   const session = await getUserSession();
   if (!session?.user) {
-    return NextResponse.json({ error: "Bạn cần đăng nhập để nhập danh sách." }, { status: 401 });
+    return jsonResponse({ error: "Bạn cần đăng nhập để nhập danh sách." }, 401);
   }
+  if (!assertSameOrigin(request)) return jsonResponse({ error: "Yêu cầu không hợp lệ." }, 403);
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_IMPORT_BODY_BYTES) return jsonResponse({ error: "File import vượt quá 5 MB." }, 413);
 
-  const requestPayload = importRequestSchema.safeParse(await request.json().catch(() => null));
+  let rawBody: unknown = null;
+  try {
+    const body = await request.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_IMPORT_BODY_BYTES) {
+      return jsonResponse({ error: "File import vượt quá 5 MB." }, 413);
+    }
+    rawBody = JSON.parse(body);
+  } catch {
+    return jsonResponse({ error: "Dữ liệu import không hợp lệ." }, 400);
+  }
+  const requestPayload = importRequestSchema.safeParse(rawBody);
   if (!requestPayload.success) {
-    return NextResponse.json({ error: "Dữ liệu import không hợp lệ." }, { status: 400 });
+    return jsonResponse({ error: "Dữ liệu import không hợp lệ." }, 400);
+  }
+  if (
+    requestPayload.data.rows.some(
+      (row) => Object.keys(row).length > 100 || Object.values(row).some((value) => typeof value === "string" && value.length > 5000),
+    )
+  ) {
+    return jsonResponse({ error: "File có quá nhiều cột hoặc một ô vượt quá giới hạn." }, 413);
   }
 
   try {
@@ -52,12 +96,12 @@ export async function POST(request: Request) {
     const { context, rows, headers, confirm } = requestPayload.data;
     const teacherClass = await getTeacherClass(session.user.id, context.classId);
     if (!teacherClass || teacherClass.organizationId !== context.organizationId || teacherClass.schoolYearId !== context.schoolYearId) {
-      return NextResponse.json({ error: "Bạn không có quyền nhập cho lớp này." }, { status: 403 });
+      return jsonResponse({ error: "Bạn không có quyền nhập cho lớp này." }, 403);
     }
 
     const plan = buildStudentImportPlan({ context, rows, headers });
     if (!confirm) {
-      return NextResponse.json({
+      return jsonResponse({
         data: {
           mode: "dry-run",
           counts: plan.counts,
@@ -69,18 +113,18 @@ export async function POST(request: Request) {
     }
 
     const result = await persistStudentImportPlan(plan, session.user.id);
-    return NextResponse.json({ data: { mode: "committed", result, summary: plan.summary } }, { status: 201 });
+    return jsonResponse({ data: { mode: "committed", result, summary: plan.summary } }, 201);
   } catch (error) {
     if (error instanceof StudentImportInputError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return jsonResponse({ error: error.message }, 400);
     }
     if (error instanceof StudentImportPersistenceError) {
-      return NextResponse.json(
+      return jsonResponse(
         { error: error.message, code: error.code, rowNumber: error.rowNumber },
-        { status: error.code === "FORBIDDEN_CLASS_ACCESS" ? 403 : 422 },
+        error.code === "FORBIDDEN_CLASS_ACCESS" ? 403 : 422,
       );
     }
 
-    return NextResponse.json({ error: "Không thể xử lý import lúc này." }, { status: 500 });
+    return jsonResponse({ error: "Không thể xử lý import lúc này." }, 500);
   }
 }

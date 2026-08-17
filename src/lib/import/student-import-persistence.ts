@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -33,7 +33,8 @@ export class StudentImportPersistenceError extends Error {
     | "STUDENT_NAME_COLLISION"
     | "DUPLICATE_EXISTING_CODE"
     | "CLASS_ROLE_NOT_FOUND"
-    | "SEAT_COLLISION",
+    | "SEAT_COLLISION"
+    | "STUDENT_STATUS_CONFLICT",
     public readonly rowNumber?: number,
     message = "Không thể cập nhật danh sách học sinh.",
   ) {
@@ -76,7 +77,7 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
         and(
           eq(classMemberships.userId, actorUserId),
           eq(classMemberships.classId, context.classId),
-          inArray(classMemberships.role, ["homeroom_teacher", "teacher", "assistant"]),
+          inArray(classMemberships.role, ["homeroom_teacher", "teacher"]),
           eq(users.status, "active"),
         ),
       )
@@ -107,6 +108,10 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
       throw new StudentImportPersistenceError("CLASS_CONTEXT_MISMATCH");
     }
 
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:student-import:${context.organizationId}`}, 0))`,
+    );
+
     const roleRows = await tx
       .select({ id: classRoles.id, name: classRoles.name })
       .from(classRoles)
@@ -114,7 +119,7 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
     const roleIds = new Map(roleRows.map((role) => [normalizeRole(role.name), role.id]));
 
     const existingStudents = await tx
-      .select({ id: students.id, studentCode: students.studentCode, fullName: students.fullName })
+      .select({ id: students.id, studentCode: students.studentCode, fullName: students.fullName, status: students.status })
       .from(students)
       .where(eq(students.organizationId, context.organizationId));
     const studentsByCode = new Map<string, (typeof existingStudents)[number]>();
@@ -149,6 +154,13 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
           "Mã học sinh đã tồn tại với tên khác; cần đối chiếu thủ công.",
         );
       }
+      if (existing && existing.status !== "active") {
+        throw new StudentImportPersistenceError(
+          "STUDENT_STATUS_CONFLICT",
+          row.rowNumber,
+          "Học sinh đã tồn tại nhưng không ở trạng thái active; cần đối chiếu thủ công.",
+        );
+      }
 
       const classRoleId = row.classRole ? roleIds.get(normalizeRole(row.classRole)) : undefined;
       if (row.classRole && !classRoleId) {
@@ -159,32 +171,38 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
         );
       }
 
-      const studentValues = {
+      const studentUpdateValues = {
         organizationId: context.organizationId,
         studentCode: row.studentCode,
         fullName: row.fullName,
+        updatedAt: new Date(),
+        ...(row.birthDate !== undefined ? { birthDate: row.birthDate } : {}),
+        ...(row.gender !== undefined ? { gender: row.gender } : {}),
+      };
+      const studentInsertValues = {
+        ...studentUpdateValues,
         birthDate: row.birthDate ?? null,
         gender: row.gender ?? null,
         status: "active" as const,
-        updatedAt: new Date(),
       };
 
       let studentId: string;
       if (existing) {
         const [updated] = await tx
           .update(students)
-          .set(studentValues)
+          .set(studentUpdateValues)
           .where(eq(students.id, existing.id))
           .returning({ id: students.id });
         studentId = updated.id;
         updatedStudents += 1;
       } else {
-        const [created] = await tx.insert(students).values(studentValues).returning({ id: students.id });
+        const [created] = await tx.insert(students).values(studentInsertValues).returning({ id: students.id });
         studentId = created.id;
         studentsByCode.set(row.studentCode, {
           id: studentId,
           studentCode: row.studentCode,
           fullName: row.fullName,
+          status: "active",
         });
         createdStudents += 1;
       }
@@ -208,15 +226,16 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
         .limit(1);
 
       if (membership) {
+        const membershipValues = {
+          seatNo: row.seatNumber ?? null,
+          groupName: row.group ?? null,
+          leftAt: null,
+          updatedAt: new Date(),
+          ...(row.classRole !== undefined ? { classRoleId: classRoleId ?? null } : {}),
+        };
         await tx
           .update(classStudents)
-          .set({
-            seatNo: row.seatNumber ?? null,
-            groupName: row.group ?? null,
-            classRoleId: classRoleId ?? null,
-            leftAt: null,
-            updatedAt: new Date(),
-          })
+          .set(membershipValues)
           .where(eq(classStudents.id, membership.id));
         updatedMemberships += 1;
       } else {

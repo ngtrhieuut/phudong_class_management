@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Nunito_Sans, Quicksand } from "next/font/google";
 import "./globals.css";
 
@@ -21,6 +21,12 @@ export const metadata: Metadata = {
   },
   description:
     "Quản lý lớp học tích cực, ghi nhận hành vi tốt và theo dõi tiến bộ của học sinh.",
+  manifest: "/manifest.webmanifest",
+  icons: { icon: "/icons/phudong-192.svg", apple: "/icons/phudong-192.svg" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#005da7",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

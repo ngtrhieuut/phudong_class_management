@@ -3,21 +3,25 @@ import { DashboardScreen } from "@/components/dashboard/dashboard-screen";
 import { requireUserSession } from "@/lib/auth/server";
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { toDashboardPresentation } from "@/lib/classroom/presentation";
-import { getTeacherDashboardData } from "@/lib/classroom/queries";
+import { getTeacherClasses, getTeacherDashboardData } from "@/lib/classroom/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherDashboardPage() {
+export default async function TeacherDashboardPage({ searchParams }: { searchParams: Promise<{ classId?: string }> }) {
   const session = await requireUserSession();
   const appUser = await ensureAppUser({
     id: session.user.id,
     email: session.user.email,
     name: session.user.name,
   });
-  const dashboard = await getTeacherDashboardData(session.user.id);
+  const classId = (await searchParams).classId;
+  const [dashboard, classOptions] = await Promise.all([
+    getTeacherDashboardData(session.user.id, classId),
+    getTeacherClasses(session.user.id),
+  ]);
 
   return (
-    <AppShell active="Trang chủ">
+    <AppShell active="Trang chủ" classOptions={classOptions} selectedClassId={dashboard?.classContext.id ?? classId} teacherName={appUser.displayName} className={dashboard?.classContext.name} schoolYearName={dashboard?.classContext.schoolYearName}>
       {dashboard ? (
         <DashboardScreen
           teacherName={appUser.displayName}

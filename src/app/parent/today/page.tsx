@@ -1,77 +1,55 @@
 import Link from "next/link";
-import { ArrowRight, Bell, CheckCircle, Clock, Gift, House, Medal, Sparkle, Star, TrendUp, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRight, CheckCircle, Gift, Medal, Star, TrendUp } from "@phosphor-icons/react/dist/ssr";
+
+import { ensureAppUser } from "@/lib/auth/app-user";
 import { requireUserSession } from "@/lib/auth/server";
+import { resolveParentChild } from "@/lib/parent/page-data";
+import { ParentEmptyState, ParentShell, initials } from "@/components/parent/parent-shell";
 
 export const dynamic = "force-dynamic";
 
-export default async function ParentTodayPage() {
-  await requireUserSession();
+function levelFor(score: number, levels: readonly { name: string; minScore: number; maxScore: number | null; sortOrder: number }[]) {
+  const ordered = [...levels].sort((a, b) => a.sortOrder - b.sortOrder);
+  const current = ordered.find((level) => score >= level.minScore && (level.maxScore === null || score <= level.maxScore));
+  const next = ordered.find((level) => level.minScore > score);
+  if (!current) return { name: "Chưa thiết lập", number: "—", progress: 0, nextScore: null };
+  const progress = next ? Math.max(0, Math.min(100, Math.round(((score - current.minScore) / Math.max(1, next.minScore - current.minScore)) * 100))) : 100;
+  return { name: current.name, number: String(current.sortOrder), progress, nextScore: next?.minScore ?? null };
+}
+
+export default async function ParentTodayPage({ searchParams }: { searchParams: Promise<{ studentId?: string }> }) {
+  const session = await requireUserSession();
+  await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const { children, studentId, data } = await resolveParentChild(session.user.id, (await searchParams).studentId);
+
+  if (!studentId || !data) return <ParentShell active="Hôm nay" childName="Phù Đổng" className="Cổng phụ huynh" studentId="none" childrenOptions={children}><ParentEmptyState /></ParentShell>;
+  const score = Number(data.child.lifetimeScore ?? 0);
+  const spendable = Number(data.child.spendableStars ?? 0);
+  const level = levelFor(score, data.levels);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayPositive = data.scores.filter((item) => new Date(item.occurredAt).getTime() >= todayStart.getTime()).reduce((total, item) => total + Math.max(0, Number(item.spendableDelta)), 0);
 
   return (
-    <main className="min-h-[100dvh] bg-[var(--surface)] pb-24">
-      <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-[var(--surface-high)] bg-[var(--surface)]/95 px-5 backdrop-blur md:px-8">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">M</span>
-          <div>
-            <p className="font-heading text-lg font-bold text-[var(--primary)]">Lớp 1/6</p>
-            <p className="font-body text-xs text-[var(--on-surface-variant)]">Phù Đổng</p>
-          </div>
+    <ParentShell active="Hôm nay" childName={data.child.fullName} className={data.child.className} studentId={studentId} childrenOptions={children}>
+      <section className="relative overflow-hidden rounded-[2rem] bg-[var(--surface-lowest)] p-6 text-center soft-shadow sm:p-8">
+        <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[var(--primary-fixed)]/60" />
+        <div className="relative mx-auto flex h-28 w-28 items-center justify-center rounded-[2rem] bg-[var(--primary-fixed)] font-heading text-4xl font-bold text-[var(--primary)]">{initials(data.child.fullName)}</div>
+        <h1 className="relative mt-5 font-heading text-3xl font-bold text-[var(--primary)]">Chào mừng {data.child.shortName || data.child.fullName}!</h1>
+        <span className="relative mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--tertiary-container)]/20 px-3 py-1 font-heading text-xs font-bold text-[var(--tertiary)]"><Medal size={15} weight="fill" /> {level.name}</span>
+        <p className="relative mt-3 font-body text-sm text-[var(--on-surface-variant)]">Cấp độ hiện tại: <strong>Level {level.number}</strong></p>
+        <div className="relative mx-auto mt-5 max-w-lg rounded-2xl bg-[var(--surface-low)] p-4 text-left">
+          <div className="flex justify-between font-heading text-xs font-bold text-[var(--primary)]"><span>Tiến độ cấp độ tiếp theo</span><span>{level.progress}%</span></div>
+          <div className="mt-3 h-3 overflow-hidden rounded-full bg-[var(--primary-fixed)]"><div className="h-full rounded-full bg-[var(--positive)]" style={{ width: `${level.progress}%` }} /></div>
+          <p className="mt-2 text-right font-body text-xs text-[var(--on-surface-variant)]">{level.nextScore === null ? "Con đã ở cấp độ cao nhất hiện có." : `Còn ${Math.max(0, level.nextScore - score)} điểm để lên cấp độ mới.`}</p>
         </div>
-        <button aria-label="Thông báo" className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--primary)] transition hover:bg-[var(--surface-container)]"><Bell size={22} weight="fill" /></button>
-      </header>
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-8">
-        <section className="relative overflow-hidden rounded-[2rem] bg-[var(--surface-lowest)] p-6 text-center soft-shadow sm:p-8">
-          <div className="absolute -right-12 -top-16 h-44 w-44 rounded-full bg-[var(--primary-fixed)]/60" />
-          <div className="relative mx-auto flex h-28 w-28 items-center justify-center rounded-[2rem] bg-[var(--primary-fixed)] font-heading text-4xl font-bold text-[var(--primary)]">MA</div>
-          <h1 className="relative mt-5 font-heading text-3xl font-bold text-[var(--primary)]">Mai Anh</h1>
-          <span className="relative mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--tertiary-container)]/20 px-3 py-1 font-heading text-xs font-bold text-[var(--tertiary)]"><Medal size={15} weight="fill" /> Người truyền cảm hứng</span>
-          <p className="relative mt-3 font-body text-sm text-[var(--on-surface-variant)]">Cấp độ hiện tại: <strong>Level 4</strong></p>
-          <div className="relative mx-auto mt-5 max-w-lg rounded-2xl bg-[var(--surface-low)] p-4 text-left">
-            <div className="flex justify-between font-heading text-xs font-bold text-[var(--primary)]"><span>Tiến độ lên Level 5</span><span>72/100 sao</span></div>
-            <div className="mt-3 h-3 overflow-hidden rounded-full bg-[var(--primary-fixed)]"><div className="h-full w-[72%] rounded-full bg-[var(--positive)]" /></div>
-            <p className="mt-2 text-right font-body text-xs text-[var(--on-surface-variant)]">Còn 28 sao nữa để mở cấp độ mới.</p>
-          </div>
-        </section>
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <section className="rounded-[2rem] bg-[var(--surface-lowest)] p-6 soft-shadow">
-            <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--secondary-container)] text-[var(--secondary)]"><Star size={19} weight="fill" /></span><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Tổng kết hôm nay</h2></div>
-            <p className="mt-6 font-heading text-2xl font-bold leading-tight text-[var(--primary)]">Con đã đạt được <span className="text-4xl text-[var(--secondary-container)]">5</span> sao hôm nay.</p>
-            <p className="mt-3 font-body text-sm leading-6 text-[var(--on-surface-variant)]">Tuyệt vời. Con đang làm rất tốt.</p>
-            <button className="mt-6 inline-flex min-h-11 items-center gap-1 rounded-full bg-[var(--surface-low)] px-4 font-heading text-xs font-bold text-[var(--primary)]">Xem chi tiết <ArrowRight size={16} /></button>
-          </section>
-          <section className="rounded-[2rem] bg-[var(--needs-improvement-soft)] p-6 soft-shadow">
-            <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--needs-improvement)] text-white"><Bell size={18} weight="fill" /></span><h2 className="font-heading text-xl font-bold text-[var(--needs-improvement)]">Thông báo mới nhất</h2></div>
-            <div className="mt-6 rounded-2xl bg-white/70 p-4"><p className="font-body text-sm leading-6 text-[var(--on-surface)]">Cô Mai vừa tuyên dương con trên bảng tin của lớp.</p><p className="mt-2 font-body text-xs text-[var(--on-surface-variant)]">10 phút trước</p></div>
-          </section>
-        </div>
-        <section>
-          <h2 className="px-2 font-heading text-2xl font-bold text-[var(--on-surface)]">Hôm nay của con</h2>
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {[
-              { label: "Lịch sử điểm", detail: "Xem chi tiết sao nhận và điều chỉnh", icon: Clock },
-              { label: "Bộ sưu tập huy hiệu", detail: "Những cột mốc Mai Anh đã đạt", icon: Medal },
-              { label: "Nhiệm vụ tuần", detail: "Theo dõi việc đang thực hiện", icon: CheckCircle },
-              { label: "Kho quà", detail: "Đổi sao lấy đặc quyền vui vẻ", icon: Gift },
-            ].map(({ label, detail, icon: Icon }) => (
-              <Link key={label} href="#" className="flex min-h-20 items-center gap-4 rounded-2xl bg-[var(--surface-lowest)] p-4 soft-shadow transition hover:bg-[var(--surface-low)]">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--surface-container)] text-[var(--primary)]"><Icon size={23} weight="fill" /></span>
-                <span className="min-w-0 flex-1"><span className="block font-heading text-sm font-bold text-[var(--on-surface)]">{label}</span><span className="mt-1 block font-body text-xs text-[var(--on-surface-variant)]">{detail}</span></span>
-                <ArrowRight size={18} className="text-[var(--outline)]" />
-              </Link>
-            ))}
-          </div>
-        </section>
+      </section>
+      <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
+        <section className="rounded-[2rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--secondary-container)] text-[var(--secondary)]"><Star size={19} weight="fill" /></span><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Tổng kết hôm nay</h2></div><p className="mt-6 font-heading text-2xl font-bold leading-tight text-[var(--primary)]">Con đã nhận <span className="text-4xl text-[var(--secondary-container)]">{todayPositive}</span> sao hôm nay.</p><p className="mt-3 font-body text-sm leading-6 text-[var(--on-surface-variant)]">Mỗi ghi nhận nhỏ đều giúp con tiến bộ từng ngày.</p><Link href={`/parent/progress?studentId=${studentId}`} className="mt-6 inline-flex min-h-11 items-center gap-1 rounded-full bg-[var(--surface-low)] px-4 font-heading text-xs font-bold text-[var(--primary)]">Xem tiến bộ <ArrowRight size={16} /></Link></section>
+        <section className="rounded-[2rem] bg-[var(--primary)] p-6 text-white shadow-lg shadow-blue-900/10"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15"><Gift size={19} weight="fill" /></span><h2 className="font-heading text-xl font-bold">Số sao có thể đổi</h2></div><p className="mt-6 font-heading text-5xl font-bold">{spendable}</p><p className="mt-2 font-body text-sm text-white/75">Sao dùng để đổi phần thưởng trong lớp.</p><Link href={`/parent/tasks?studentId=${studentId}`} className="mt-6 inline-flex min-h-11 items-center gap-1 rounded-full bg-white px-4 font-heading text-xs font-bold text-[var(--primary)]">Xem nhiệm vụ <ArrowRight size={16} /></Link></section>
       </div>
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-[76px] items-center justify-around border-t border-[var(--surface-high)] bg-[var(--surface-lowest)] px-3 pb-2 shadow-[0_-4px_16px_rgb(0_93_167_/_0.08)]">
-        {[
-          { label: "Hôm nay", icon: House, active: true },
-          { label: "Tiến bộ", icon: TrendUp },
-          { label: "Tuyên dương", icon: Sparkle },
-          { label: "Hồ sơ", icon: UsersThree },
-        ].map(({ label, icon: Icon, active }) => (
-          <button key={label} className={"flex min-h-12 min-w-16 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 " + (active ? "text-[var(--primary)]" : "text-[var(--on-surface-variant)]")}><Icon size={21} weight={active ? "fill" : "regular"} /><span className="font-heading text-[10px] font-bold">{label}</span></button>
-        ))}
-      </nav>
-    </main>
+      <section className="mt-6 rounded-[2rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><div className="flex items-center justify-between gap-3"><h2 className="flex items-center gap-2 font-heading text-2xl font-bold text-[var(--on-surface)]"><TrendUp size={22} className="text-[var(--primary)]" /> Hoạt động gần đây</h2><Link href={`/parent/progress?studentId=${studentId}`} className="font-heading text-xs font-bold text-[var(--primary)]">Xem tất cả</Link></div><div className="mt-5 space-y-3">{data.scores.slice(0, 4).map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl bg-[var(--surface-low)] p-4"><span className={`flex h-10 w-10 items-center justify-center rounded-full ${Number(item.spendableDelta) >= 0 ? "bg-[var(--positive-soft)] text-[var(--positive)]" : "bg-[var(--needs-improvement-soft)] text-[var(--needs-improvement)]"}`}><Star size={18} weight="fill" /></span><div className="min-w-0 flex-1"><p className="font-body text-sm text-[var(--on-surface)]">{item.reason}</p><p className="mt-1 font-body text-xs text-[var(--on-surface-variant)]">{new Date(item.occurredAt).toLocaleDateString("vi-VN")}</p></div><span className="font-heading text-sm font-bold text-[var(--primary)]">{Number(item.spendableDelta) > 0 ? "+" : ""}{item.spendableDelta}</span></div>)}{data.scores.length === 0 ? <p className="font-body text-sm text-[var(--on-surface-variant)]">Chưa có hoạt động nào được ghi nhận.</p> : null}</div></section>
+      <section className="mt-6 grid gap-4 sm:grid-cols-2"><Link href={`/parent/tasks?studentId=${studentId}`} className="flex min-h-20 items-center gap-4 rounded-2xl bg-[var(--surface-lowest)] p-4 soft-shadow"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-container)] text-[var(--primary)]"><CheckCircle size={23} weight="fill" /></span><span className="flex-1"><span className="block font-heading text-sm font-bold text-[var(--on-surface)]">Nhiệm vụ của con</span><span className="mt-1 block font-body text-xs text-[var(--on-surface-variant)]">{data.tasks.filter((task) => task.taskStatus !== "completed").length} nhiệm vụ đang theo dõi</span></span><ArrowRight size={18} className="text-[var(--outline)]" /></Link><Link href={`/parent/badges?studentId=${studentId}`} className="flex min-h-20 items-center gap-4 rounded-2xl bg-[var(--surface-lowest)] p-4 soft-shadow"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--secondary-container)] text-[var(--secondary)]"><Medal size={23} weight="fill" /></span><span className="flex-1"><span className="block font-heading text-sm font-bold text-[var(--on-surface)]">Bộ sưu tập huy hiệu</span><span className="mt-1 block font-body text-xs text-[var(--on-surface-variant)]">{data.badges.length} huy hiệu đã đạt</span></span><ArrowRight size={18} className="text-[var(--outline)]" /></Link></section>
+    </ParentShell>
   );
 }

@@ -112,7 +112,10 @@ export function DashboardScreen({
     try {
       const response = await fetch("/api/teacher/score", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": crypto.randomUUID(),
+        },
         body: JSON.stringify({
           classId,
           studentIds: selectedStudentIds,

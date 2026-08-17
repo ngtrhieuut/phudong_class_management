@@ -64,6 +64,9 @@ function parseDelimitedText(text: string, delimiter: string): string[][] {
 }
 
 async function readRosterFile(file: File) {
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("File import vượt quá 5 MB.");
+  }
   if (file.name.toLocaleLowerCase().endsWith(".xlsx")) {
     const [sheet] = await readXlsxFile(file);
     const [headerRow = [], ...dataRows] = sheet?.data ?? [];

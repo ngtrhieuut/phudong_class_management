@@ -1,43 +1,28 @@
 import { ChartBar, CheckCircle, Star, TrendUp } from "@phosphor-icons/react/dist/ssr";
+
 import { AppShell } from "@/components/layout/app-shell";
+import { ensureAppUser } from "@/lib/auth/app-user";
 import { requireUserSession } from "@/lib/auth/server";
+import { getClassAnalytics, getClassConfiguration, getTeacherClass, getTeacherClasses } from "@/lib/classroom/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeacherAnalyticsPage() {
-  await requireUserSession();
-
-  return (
-    <AppShell active="Thống kê">
-      <div className="mx-auto max-w-6xl px-5 py-7 sm:px-8">
-        <p className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-[var(--tertiary)]">Nhìn thấy tiến bộ</p>
-        <h1 className="mt-2 font-heading text-4xl font-bold text-[var(--primary)]">Thống kê lớp học</h1>
-        <p className="mt-3 max-w-xl font-body text-base leading-7 text-[var(--on-surface-variant)]">Tập trung vào xu hướng của cả lớp, không biến dữ liệu thành bảng xếp hạng.</p>
-        <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {[
-            { label: "Sao tích cực tuần này", value: "86", change: "+18%", icon: Star, tone: "text-[var(--secondary)] bg-[#fff2bd]" },
-            { label: "Nhiệm vụ hoàn thành", value: "74%", change: "+6%", icon: CheckCircle, tone: "text-[var(--positive)] bg-[var(--positive-soft)]" },
-            { label: "Học sinh có tiến bộ", value: "21", change: "+4 bạn", icon: TrendUp, tone: "text-[var(--primary)] bg-[var(--primary-fixed)]" },
-          ].map(({ label, value, change, icon: Icon, tone }) => (
-            <div key={label} className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-5 soft-shadow">
-              <span className={"flex h-11 w-11 items-center justify-center rounded-full " + tone}><Icon size={22} weight="fill" /></span>
-              <p className="mt-5 font-body text-sm text-[var(--on-surface-variant)]">{label}</p>
-              <div className="mt-1 flex items-end justify-between gap-2"><p className="font-heading text-3xl font-bold text-[var(--on-surface)]">{value}</p><span className="font-heading text-xs font-bold text-[var(--positive)]">{change}</span></div>
-            </div>
-          ))}
-        </div>
-        <section className="mt-6 rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow">
-          <h2 className="flex items-center gap-2 font-heading text-xl font-bold text-[var(--on-surface)]"><ChartBar size={22} className="text-[var(--primary)]" /> Nhịp tiến bộ 7 ngày</h2>
-          <div className="mt-8 flex h-56 items-end gap-3 border-b border-l border-[var(--outline-variant)] px-3 pb-0 sm:gap-6">
-            {[42, 58, 46, 72, 64, 88, 78].map((height, index) => (
-              <div key={index} className="flex flex-1 flex-col items-center gap-2">
-                <div className="w-full max-w-12 rounded-t-full bg-[var(--primary)]" style={{ height: height + "%" }} />
-                <span className="font-body text-xs text-[var(--on-surface-variant)]">{["T2", "T3", "T4", "T5", "T6", "T7", "CN"][index]}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </AppShell>
-  );
+export default async function TeacherAnalyticsPage({ searchParams }: { searchParams: Promise<{ classId?: string }> }) {
+  const session = await requireUserSession();
+  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const classId = (await searchParams).classId;
+  const [classContext, classOptions] = await Promise.all([
+    getTeacherClass(session.user.id, classId),
+    getTeacherClasses(session.user.id),
+  ]);
+  if (!classContext) return <AppShell active="Thống kê" classOptions={classOptions} selectedClassId={classId} classSwitcherPath="/teacher/analytics" teacherName={appUser.displayName}><div className="mx-auto max-w-3xl px-5 py-16 text-center"><h1 className="font-heading text-3xl font-bold text-[var(--primary)]">Chưa có lớp được phân công</h1></div></AppShell>;
+  const [analytics, configuration] = await Promise.all([
+    getClassAnalytics(session.user.id, classContext.id),
+    getClassConfiguration(session.user.id, classContext.id),
+  ]);
+  const totals = analytics.totals;
+  const daily = analytics.dailyScores.map((item) => ({ ...item, total: Number(item.total) }));
+  const maxDaily = Math.max(1, ...daily.map((item) => Math.abs(item.total)));
+  const completedTasks = configuration.tasks.filter((task) => task.status === "completed").length;
+  return <AppShell active="Thống kê" classOptions={classOptions} selectedClassId={classContext.id} classSwitcherPath="/teacher/analytics" teacherName={appUser.displayName} className={classContext.name} schoolYearName={classContext.schoolYearName}><div className="mx-auto max-w-6xl px-5 py-7 sm:px-8"><p className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-[var(--tertiary)]">Nhìn thấy tiến bộ</p><h1 className="mt-2 font-heading text-4xl font-bold text-[var(--primary)]">Thống kê lớp học</h1><p className="mt-3 max-w-xl font-body text-base leading-7 text-[var(--on-surface-variant)]">Tập trung vào xu hướng của cả lớp, không biến dữ liệu thành bảng xếp hạng.</p><div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3"><div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-5 soft-shadow"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#fff2bd] text-[var(--secondary)]"><Star size={22} weight="fill" /></span><p className="mt-5 font-body text-sm text-[var(--on-surface-variant)]">Tổng điểm tích cực</p><p className="mt-1 font-heading text-3xl font-bold text-[var(--on-surface)]">{totals?.lifetimeScore ?? 0}</p></div><div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-5 soft-shadow"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--positive-soft)] text-[var(--positive)]"><CheckCircle size={22} weight="fill" /></span><p className="mt-5 font-body text-sm text-[var(--on-surface-variant)]">Nhiệm vụ trong lớp</p><p className="mt-1 font-heading text-3xl font-bold text-[var(--on-surface)]">{completedTasks}/{configuration.tasks.length}</p></div><div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-5 soft-shadow"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-fixed)] text-[var(--primary)]"><TrendUp size={22} weight="fill" /></span><p className="mt-5 font-body text-sm text-[var(--on-surface-variant)]">Học sinh đang hoạt động</p><p className="mt-1 font-heading text-3xl font-bold text-[var(--on-surface)]">{totals?.studentCount ?? 0}</p></div></div><section className="mt-6 rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="flex items-center gap-2 font-heading text-xl font-bold text-[var(--on-surface)]"><ChartBar size={22} className="text-[var(--primary)]" /> Điểm theo ngày · 30 ngày</h2>{daily.length > 0 ? <div className="mt-8 flex h-56 items-end gap-2 overflow-x-auto border-b border-l border-[var(--outline-variant)] px-3 pb-0 sm:gap-4">{daily.map((item) => <div key={item.day} className="flex min-w-7 flex-1 flex-col items-center gap-2"><div className={`w-full max-w-12 rounded-t-full ${item.total < 0 ? "bg-[var(--needs-improvement)]" : "bg-[var(--primary)]"}`} style={{ height: `${Math.max(8, Math.round((Math.abs(item.total) / maxDaily) * 100))}%` }} title={`${item.day}: ${item.total}`} /><span className="font-body text-[10px] text-[var(--on-surface-variant)]">{item.day.slice(5)}</span></div>)}</div> : <p className="mt-6 font-body text-sm text-[var(--on-surface-variant)]">Chưa có dữ liệu điểm trong 30 ngày gần đây.</p>}</section><section className="mt-6 rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Phân loại ghi nhận</h2><div className="mt-4 grid gap-3 sm:grid-cols-2">{analytics.behaviorBreakdown.map((item) => <div key={item.transactionType} className="flex items-center justify-between rounded-2xl bg-[var(--surface-low)] p-4"><span className="font-body text-sm text-[var(--on-surface-variant)]">{item.transactionType}</span><span className="font-heading text-lg font-bold text-[var(--primary)]">{item.total}</span></div>)}{analytics.behaviorBreakdown.length === 0 ? <p className="font-body text-sm text-[var(--on-surface-variant)]">Chưa có dữ liệu phân loại.</p> : null}</div></section></div></AppShell>;
 }

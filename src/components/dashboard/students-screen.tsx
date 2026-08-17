@@ -7,7 +7,7 @@ import { MagnifyingGlass, SlidersHorizontal, UsersThree } from "@phosphor-icons/
 import { StudentCard } from "@/components/dashboard/student-card";
 import type { DemoStudent } from "@/lib/demo-data";
 
-export function StudentsScreen({ initialStudents }: { initialStudents: DemoStudent[] }) {
+export function StudentsScreen({ initialStudents, exportHref, importHref = "/teacher/students/import" }: { initialStudents: DemoStudent[]; exportHref?: string; importHref?: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [group, setGroup] = useState("Tất cả tổ");
@@ -38,7 +38,8 @@ export function StudentsScreen({ initialStudents }: { initialStudents: DemoStude
           <div className="flex items-center gap-2 rounded-full bg-[var(--surface-low)] px-4 py-3 font-heading text-sm font-bold text-[var(--primary)]">
             <UsersThree size={20} weight="fill" /> {initialStudents.length} học sinh
           </div>
-          <Link href="/teacher/students/import" className="inline-flex min-h-11 items-center rounded-full bg-[var(--primary)] px-4 font-heading text-sm font-bold text-white transition hover:bg-[var(--primary-container)]">Nhập danh sách</Link>
+          <Link href={importHref} className="inline-flex min-h-11 items-center rounded-full bg-[var(--primary)] px-4 font-heading text-sm font-bold text-white transition hover:bg-[var(--primary-container)]">Nhập danh sách</Link>
+          {exportHref ? <a href={exportHref} className="inline-flex min-h-11 items-center rounded-full bg-[var(--surface-low)] px-4 font-heading text-sm font-bold text-[var(--primary)] transition hover:bg-[var(--surface-container)]">Xuất CSV</a> : null}
         </div>
       </div>
       <div className="mt-8 flex flex-col gap-3 rounded-[1.5rem] bg-[var(--surface-lowest)] p-4 soft-shadow sm:flex-row">

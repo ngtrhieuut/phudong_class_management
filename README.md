@@ -32,6 +32,28 @@ Codex phải sử dụng **Neon MCP, GitHub Connector và Vercel Connector** đ�
 - `.env.example` — template environment variables, không chứa secret.
 - `assets/reference/class-management-concept.jpg` — ảnh concept tham chiếu đã tối ưu dung lượng.
 
+## Chạy và kiểm tra
+
+```bash
+npm install
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run test:e2e
+```
+
+Các route teacher và parent đều dùng server-side session guard; dữ liệu lớp/học sinh được đọc qua Drizzle và Neon, không dùng fixture khi chạy production. Teacher có thể đổi lớp bằng `classId`, nhập danh sách `.xlsx/.csv`, xuất CSV, ghi nhận điểm có `Idempotency-Key`, tạo nhiệm vụ, đổi quà và đăng tuyên dương. Parent chỉ đọc được học sinh có quan hệ guardian hợp lệ.
+
+## Database và deployment
+
+1. Sao chép `.env.example` thành `.env.local` và điền `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`.
+2. Kiểm tra migration bằng `npm run db:check` và thử migration trên Neon branch trước khi apply vào main.
+3. Chỉ chạy `npm run db:migrate` khi đã xác nhận đúng database/branch; không commit secret hoặc file `.vercel`.
+4. Sau khi push `main`, kiểm tra deployment trên Vercel và gọi `/api/health/db`. Các route protected phải redirect về `/auth/sign-in` khi chưa đăng nhập.
+
+Seed trong `src/db/seed.ts` chỉ dành cho môi trường demo/local. Dữ liệu danh sách học sinh thật phải đi qua import có preview, validation, duplicate detection và audit log; không tự động seed dữ liệu PII vào production.
+
 ## Phạm vi MVP khuyến nghị
 
 1. Quản lý lớp và danh sách học sinh.

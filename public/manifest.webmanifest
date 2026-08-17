@@ -1,0 +1,14 @@
+{
+  "name": "Phù Đổng Class Management",
+  "short_name": "Phù Đổng",
+  "description": "Quản lý lớp học tích cực và theo dõi tiến bộ của học sinh.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f9ff",
+  "theme_color": "#005da7",
+  "lang": "vi-VN",
+  "icons": [
+    { "src": "/icons/phudong-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/icons/phudong-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -32,7 +34,8 @@ export class ScoreRecordingError extends Error {
     | "STUDENT_NOT_IN_CLASS"
     | "BEHAVIOR_NOT_AVAILABLE"
     | "DAILY_LIMIT_REACHED"
-    | "INSUFFICIENT_BALANCE",
+    | "INSUFFICIENT_BALANCE"
+    | "IDEMPOTENCY_CONFLICT",
     message: string,
   ) {
     super(message);
@@ -44,10 +47,31 @@ function uniqueStudentIds(studentIds: readonly string[]): string[] {
   return [...new Set(studentIds)];
 }
 
-export async function recordBehaviorScoreBatch(input: unknown, actorUserId: string) {
+function requestFingerprint(input: ScoreBatchInput): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        classId: input.classId,
+        studentIds: [...input.studentIds].sort(),
+        behaviorTemplateId: input.behaviorTemplateId,
+        reason: input.reason ?? "",
+        note: input.note ?? "",
+      }),
+    )
+    .digest("hex");
+}
+
+export async function recordBehaviorScoreBatch(
+  input: unknown,
+  actorUserId: string,
+  idempotencyKey: string,
+) {
   const parsed = scoreBatchInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new ScoreRecordingError("INVALID_INPUT", "Dữ liệu ghi nhận không hợp lệ.");
+  }
+  if (!idempotencyKey.trim() || idempotencyKey.length > 128) {
+    throw new ScoreRecordingError("INVALID_INPUT", "Thiếu mã idempotency cho thao tác ghi nhận.");
   }
 
   const studentIds = uniqueStudentIds(parsed.data.studentIds);
@@ -66,7 +90,7 @@ export async function recordBehaviorScoreBatch(input: unknown, actorUserId: stri
           and(
             eq(classMemberships.userId, actorUserId),
             eq(classMemberships.classId, parsed.data.classId),
-            inArray(classMemberships.role, ["homeroom_teacher", "teacher", "assistant"]),
+            inArray(classMemberships.role, ["homeroom_teacher", "teacher"]),
             eq(users.status, "active"),
           ),
         )
@@ -74,6 +98,31 @@ export async function recordBehaviorScoreBatch(input: unknown, actorUserId: stri
 
       if (!classAccess) {
         throw new ScoreRecordingError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền ghi nhận cho lớp này.");
+      }
+
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:score:${parsed.data.classId}`}, 0))`,
+      );
+
+      const fingerprint = requestFingerprint(parsed.data);
+      const [previousAudit] = await tx
+        .select({ afterJson: auditLogs.afterJson })
+        .from(auditLogs)
+        .where(
+          and(
+            eq(auditLogs.organizationId, classAccess.organizationId),
+            eq(auditLogs.entityType, "score_batch"),
+            eq(auditLogs.entityId, idempotencyKey),
+            eq(auditLogs.action, "created"),
+          ),
+        )
+        .limit(1);
+      if (previousAudit) {
+        const previous = previousAudit.afterJson as { requestFingerprint?: string; result?: unknown } | null;
+        if (previous?.requestFingerprint !== fingerprint || !previous.result) {
+          throw new ScoreRecordingError("IDEMPOTENCY_CONFLICT", "Mã idempotency đã được dùng cho dữ liệu khác.");
+        }
+        return previous.result;
       }
 
       const members = await tx
@@ -179,26 +228,29 @@ export async function recordBehaviorScoreBatch(input: unknown, actorUserId: stri
       }
 
       const batchId = crypto.randomUUID();
-      await tx.insert(auditLogs).values({
-        organizationId: classAccess.organizationId,
-        actorUserId,
-        entityType: "score_batch",
-        entityId: batchId,
-        action: "created",
-        afterJson: {
-          count: studentIds.length,
-          behaviorTemplateId: behavior.id,
-          lifetimeDelta: delta.lifetimeDelta,
-          spendableDelta: delta.spendableDelta,
-        },
-      });
-
-      return {
+      const result = {
         batchId,
         recorded: studentIds.length,
         lifetimeDelta: delta.lifetimeDelta,
         spendableDelta: delta.spendableDelta,
       };
+      await tx.insert(auditLogs).values({
+        organizationId: classAccess.organizationId,
+        actorUserId,
+        entityType: "score_batch",
+        entityId: idempotencyKey,
+        action: "created",
+        afterJson: {
+          requestFingerprint: fingerprint,
+          count: studentIds.length,
+          behaviorTemplateId: behavior.id,
+          lifetimeDelta: delta.lifetimeDelta,
+          spendableDelta: delta.spendableDelta,
+          result,
+        },
+      });
+
+      return result;
     });
   } catch (error) {
     if (error instanceof ScoreRecordingError) {
@@ -206,7 +258,10 @@ export async function recordBehaviorScoreBatch(input: unknown, actorUserId: stri
     }
 
     const message = error instanceof Error ? error.message : "";
-    if (message.includes("student_score_snapshots") && message.includes("non_negative")) {
+    if (
+      message.includes("student_score_snapshots") &&
+      (message.includes("non_negative") || message.includes("check"))
+    ) {
       throw new ScoreRecordingError("INSUFFICIENT_BALANCE", "Số sao có thể đổi không đủ cho ghi nhận này.");
     }
     throw error;
