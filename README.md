@@ -43,7 +43,9 @@ npm run build
 npm run test:e2e
 ```
 
-Các route teacher và parent đều dùng server-side session guard; dữ liệu lớp/học sinh được đọc qua Drizzle và Neon, không dùng fixture khi chạy production. Teacher có thể đổi lớp bằng `classId`, nhập danh sách `.xlsx/.csv`, xuất CSV, ghi nhận điểm có `Idempotency-Key`, tạo nhiệm vụ, đổi quà và đăng tuyên dương. Parent chỉ đọc được học sinh có quan hệ guardian hợp lệ.
+Các route teacher và parent đều dùng server-side session guard; dữ liệu lớp/học sinh được đọc qua Drizzle và Neon, không dùng fixture khi chạy production. Teacher có thể đổi lớp bằng `classId`, nhập danh sách `.xlsx/.csv`, xuất CSV, ghi nhận điểm có `Idempotency-Key`, tạo nhiệm vụ, đổi quà, đăng tuyên dương và quản lý liên kết phụ huynh theo từng học sinh. Parent chỉ đọc được học sinh có quan hệ guardian hợp lệ.
+
+Liên kết guardian trong MVP dùng mô hình account-first: phụ huynh cần đăng nhập ít nhất một lần để có app user active, sau đó giáo viên nhập đúng email để liên kết; thu hồi sẽ tắt quyền xem và nhận thông báo nhưng vẫn giữ audit log.
 
 ## Database và deployment
 

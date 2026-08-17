@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ChartBar, ClipboardText, Gear, Gift, House, Plus, Sparkle, UsersThree } from "@phosphor-icons/react/dist/ssr";
+import { ChartBar, ClipboardText, Gear, Gift, House, Plus, Sparkle, UserCircle, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import { BrandMark } from "@/components/ui/brand-mark";
 
 const items = [
   { href: "/teacher/dashboard", label: "Trang chủ", Icon: House },
   { href: "/teacher/students", label: "Học sinh", Icon: UsersThree },
+  { href: "/teacher/guardians", label: "Phụ huynh", Icon: UserCircle },
   { href: "/teacher/praise", label: "Góc tuyên dương", Icon: Sparkle },
   { href: "/teacher/tasks", label: "Nhiệm vụ", Icon: ClipboardText },
   { href: "/teacher/rewards", label: "Kho quà", Icon: Gift },
