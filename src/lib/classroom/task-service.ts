@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
+import { notifyClassStaff } from "@/lib/teacher/notification-service";
 import {
   auditLogs,
   classes,
@@ -30,6 +31,32 @@ const taskInputSchema = z.object({
   studentIds: z.array(z.string().uuid()).max(500).default([]),
 }).refine((input) => input.dueAt >= input.startsAt, { message: "Hạn nhiệm vụ phải sau thời gian bắt đầu.", path: ["dueAt"] });
 
+async function notifyAssignedGuardians(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], studentIds: readonly string[]) {
+  if (studentIds.length === 0) return;
+  const guardianRows = await tx
+    .select({ userId: guardians.userId, studentId: studentGuardians.studentId })
+    .from(studentGuardians)
+    .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+    .innerJoin(users, eq(users.id, guardians.userId))
+    .where(
+      and(
+        inArray(studentGuardians.studentId, [...studentIds]),
+        eq(studentGuardians.canView, true),
+        eq(studentGuardians.receivesNotifications, true),
+        eq(users.status, "active"),
+      ),
+    );
+  const recipientKeys = new Set<string>();
+  const notificationsToInsert = guardianRows.flatMap((row) => {
+    if (!row.userId) return [];
+    const key = `${row.userId}:${row.studentId}`;
+    if (recipientKeys.has(key)) return [];
+    recipientKeys.add(key);
+    return [{ userId: row.userId, type: "task_created", title: "Có nhiệm vụ mới cho con", body: "Một nhiệm vụ mới đã được giao và có thể theo dõi trong cổng phụ huynh.", deepLink: `/parent/tasks?studentId=${row.studentId}` }];
+  });
+  if (notificationsToInsert.length > 0) await tx.insert(notifications).values(notificationsToInsert);
+}
+
 export class TaskServiceError extends Error {
   constructor(public readonly code: "INVALID_INPUT" | "FORBIDDEN_CLASS_ACCESS" | "STUDENT_NOT_IN_CLASS" | "NOT_FOUND", message: string) {
     super(message);
@@ -49,6 +76,8 @@ export async function createClassTask(input: unknown, actorUserId: string) {
     }
     const [task] = await tx.insert(tasks).values({ classId: parsed.data.classId, title: parsed.data.title, description: parsed.data.description, scope: parsed.data.scope, rewardStars: parsed.data.rewardStars, completionMode: "manual", startsAt: parsed.data.startsAt, dueAt: parsed.data.dueAt, status: "active", createdBy: actorUserId }).returning({ id: tasks.id });
     if (parsed.data.studentIds.length > 0) await tx.insert(taskAssignments).values(parsed.data.studentIds.map((studentId) => ({ taskId: task.id, studentId })));
+    await notifyAssignedGuardians(tx, parsed.data.studentIds);
+    await notifyClassStaff(tx, parsed.data.classId, "task_created");
     await tx.insert(auditLogs).values({ organizationId: access.organizationId, actorUserId, entityType: "task", entityId: task.id, action: "created", afterJson: { studentCount: parsed.data.studentIds.length, rewardStars: parsed.data.rewardStars } });
     return task;
   });

@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
+import { notifyClassStaff } from "@/lib/teacher/notification-service";
 import { auditLogs, classes, classMemberships, classStudents, rewardRedemptions, rewards, scoreTransactions, studentScoreSnapshots, students, users } from "@/db/schema";
 
 const writeRoles = ["homeroom_teacher", "teacher"] as const;
@@ -37,6 +38,7 @@ export async function redeemReward(input: unknown, actorUserId: string) {
       if (!updatedReward) throw new RewardServiceError("REWARD_NOT_AVAILABLE", "Phần thưởng vừa hết số lượng.");
     }
     await tx.insert(auditLogs).values({ organizationId: access.organizationId, actorUserId, entityType: "reward_redemption", entityId: redemption.id, action: "requested", afterJson: { costStars: reward.costStars, rewardId: reward.id, studentId: parsed.data.studentId } });
+    await notifyClassStaff(tx, parsed.data.classId, "reward_redemption_requested");
     return redemption;
   });
 }

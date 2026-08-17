@@ -1,4 +1,5 @@
 import { Bell, CaretDown, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { BrandMark } from "@/components/ui/brand-mark";
 
 function initials(name: string) {
@@ -24,10 +25,9 @@ export function TopBar({ teacherName = "Tài khoản" }: { teacherName?: string 
         />
       </label>
       <div className="ml-auto flex items-center gap-2 sm:gap-4">
-        <button aria-label="Thông báo" className="relative flex h-11 w-11 items-center justify-center rounded-full text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container)] active:scale-95">
+        <Link href="/teacher/notifications" aria-label="Thông báo" className="relative flex h-11 w-11 items-center justify-center rounded-full text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container)] active:scale-95">
           <Bell size={22} weight="regular" />
-          <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full border-2 border-[var(--surface)] bg-[var(--needs-improvement)]" />
-        </button>
+        </Link>
         <div className="hidden h-8 w-px bg-[var(--outline-variant)]/60 sm:block" />
         <button className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--outline-variant)]/50 bg-[var(--surface-lowest)] p-1 pr-3 transition hover:border-[var(--primary)]">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">{initials(teacherName)}</span>

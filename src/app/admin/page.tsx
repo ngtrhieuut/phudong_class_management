@@ -6,8 +6,8 @@ import { getAdminOverview } from "@/lib/admin/queries";
 
 export const dynamic = "force-dynamic";
 
-const entityOptions = ["score_transaction", "student_guardian", "praise_post", "reward_redemption", "student_import", "task"];
-const actionOptions = ["created", "updated", "linked", "revoked", "scored", "redeemed", "imported"];
+const entityOptions = ["score_transaction", "student_guardian", "praise_post", "reward_redemption", "student_import", "task", "report_export"];
+const actionOptions = ["created", "updated", "linked", "revoked", "scored", "redeemed", "imported", "exported"];
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ entityType?: string; action?: string }> }) {
   const session = await requireUserSession();
@@ -44,6 +44,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </section>
 
         <section className="mt-6 rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Lớp học</h2><div className="mt-4 overflow-x-auto"><table className="min-w-full text-left"><caption className="sr-only">Danh sách lớp học thuộc tổ chức</caption><thead><tr><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Tên lớp</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Khối</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Học sinh</th></tr></thead><tbody>{overview.classes.map((item) => <tr key={item.id} className="border-t border-[var(--surface-high)]"><td className="px-3 py-3 font-body text-sm">{item.name}</td><td className="px-3 py-3 font-body text-sm">{item.grade}</td><td className="px-3 py-3 font-body text-sm">{item.studentCount}</td></tr>)}{overview.classes.length === 0 ? <tr><td colSpan={3} className="px-3 py-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có lớp.</td></tr> : null}</tbody></table></div></section>
+        <section className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Thành viên tổ chức</h2><div className="mt-4 overflow-x-auto"><table className="min-w-full text-left"><caption className="sr-only">Giáo viên và thành viên tổ chức</caption><thead><tr><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Tên</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Email</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Vai trò</th></tr></thead><tbody>{overview.members.map((item) => <tr key={`${item.organizationId}-${item.userId}`} className="border-t border-[var(--surface-high)]"><td className="px-3 py-3 font-body text-sm">{item.displayName}</td><td className="px-3 py-3 font-body text-sm">{item.email || "—"}</td><td className="px-3 py-3 font-body text-sm">{item.role}</td></tr>)}{overview.members.length === 0 ? <tr><td colSpan={3} className="px-3 py-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có thành viên.</td></tr> : null}</tbody></table></div></div>
+          <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Templates & cấu hình</h2><p className="mt-2 font-body text-sm text-[var(--on-surface-variant)]">Tổng số cấu hình đang có trong phạm vi tổ chức.</p><dl className="mt-5 grid grid-cols-2 gap-3">{[["Behavior", overview.configuration.behaviors], ["Level", overview.configuration.levels], ["Badge", overview.configuration.badges], ["Reward", overview.configuration.rewards]].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-low)] p-4"><dt className="font-body text-xs text-[var(--on-surface-variant)]">{label}</dt><dd className="mt-1 font-heading text-2xl font-bold text-[var(--primary)]">{value}</dd></div>)}</dl></div>
+        </section>
       </div>
     </main>
   );
