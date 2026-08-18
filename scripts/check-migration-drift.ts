@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -19,7 +20,12 @@ type Snapshot = {
 };
 
 type MigrationJournal = {
-  entries: Array<{ tag: string }>;
+  entries: Array<{ tag: string; when: number }>;
+};
+
+type MigrationJournalRow = {
+  hash: string;
+  created_at: string | number | null;
 };
 
 const databaseUrl = process.env.DATABASE_URL_RUNTIME ?? process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
@@ -40,6 +46,14 @@ const latestMigrationTag = latestEntry.tag;
 const latestIndex = String(journal.entries.length - 1).padStart(4, "0");
 const snapshot = JSON.parse(readFileSync(resolve(migrationRoot, "meta", `${latestIndex}_snapshot.json`), "utf8")) as Snapshot;
 
+const expectedMigrationEntries = journal.entries.map((entry) => ({
+  tag: entry.tag,
+  hash: createHash("sha256")
+    .update(readFileSync(resolve(migrationRoot, `${entry.tag}.sql`)))
+    .digest("hex"),
+  createdAt: String(entry.when),
+}));
+
 function publicObjectName(value: string) {
   return value.startsWith("public.") ? value.slice("public.".length) : null;
 }
@@ -53,13 +67,28 @@ function difference(expected: Iterable<string>, actual: Set<string>) {
 }
 
 async function main() {
-  const [tableRows, columnRows, indexRows, enumRows, migrationTableRows] = await Promise.all([
+  const [tableRows, columnRows, indexRows, enumRows, migrationTableRows, migrationTableRegclass] = await Promise.all([
     sql`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`,
     sql`select table_name, column_name from information_schema.columns where table_schema = 'public'`,
     sql`select tablename, indexname from pg_indexes where schemaname = 'public'`,
     sql`select t.typname as enum_name, e.enumlabel as enum_value from pg_type t inner join pg_namespace n on n.oid = t.typnamespace inner join pg_enum e on e.enumtypid = t.oid where n.nspname = 'public' order by t.typname, e.enumsortorder`,
     sql`select table_schema, table_name from information_schema.tables where table_name = '__drizzle_migrations'`,
+    sql`select to_regclass('drizzle.__drizzle_migrations') as migration_table`,
   ]);
+
+  const migrationJournalPresent = migrationTableRows.length > 0 && Boolean(migrationTableRegclass[0]?.migration_table);
+  const migrationJournalRows = migrationJournalPresent
+    ? ((await sql`select hash, created_at from drizzle.__drizzle_migrations order by created_at, id`) as MigrationJournalRow[])
+    : [];
+  const actualMigrationEntries = migrationJournalRows.map((row) => ({ hash: String(row.hash), createdAt: String(row.created_at) }));
+  const expectedMigrationHashes = expectedMigrationEntries.map(({ hash, createdAt }) => ({ hash, createdAt }));
+  const migrationJournalMatches =
+    migrationJournalPresent &&
+    actualMigrationEntries.length === expectedMigrationHashes.length &&
+    actualMigrationEntries.every((entry, index) => {
+      const expected = expectedMigrationHashes[index];
+      return entry.hash === expected.hash && entry.createdAt === expected.createdAt;
+    });
 
   const expectedTables = sorted(Object.keys(snapshot.tables).map(publicObjectName).filter((value): value is string => Boolean(value)));
   const expectedColumns = sorted(
@@ -109,13 +138,15 @@ async function main() {
       : [{ enumName, expected, actual }];
   });
 
-  const migrationJournalPresent = migrationTableRows.length > 0;
   const report = {
     database: "public",
     expectedMigrationTags: journal.entries.map((entry) => entry.tag),
+    expectedMigrationEntries,
     latestMigrationTag,
     migrationJournal: migrationJournalPresent ? "present" : "missing",
     migrationJournalTables: migrationTableRows,
+    migrationJournalEntries: migrationJournalRows,
+    migrationJournalMatches,
     expectedTableCount: expectedTables.length,
     actualTableCount: actualTables.size,
     missingTables,
@@ -129,7 +160,7 @@ async function main() {
   console.log(JSON.stringify(report, null, 2));
 
   const schemaDrift = missingTables.length || unexpectedTables.length || missingColumns.length || unexpectedColumns.length || missingIndexes.length || unexpectedIndexes.length || enumDiff.length;
-  if (schemaDrift || (process.env.REQUIRE_MIGRATION_JOURNAL === "true" && !migrationJournalPresent)) {
+  if (schemaDrift || (process.env.REQUIRE_MIGRATION_JOURNAL === "true" && (!migrationJournalPresent || !migrationJournalMatches))) {
     process.exitCode = 1;
   }
 }

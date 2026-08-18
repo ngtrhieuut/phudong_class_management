@@ -11,7 +11,7 @@ Ngày kiểm tra live: 2026-08-18 (Asia/Ho_Chi_Minh).
 - 28 bảng trong `public` hiện chưa bật RLS và chưa có policy. Không được bật RLS trực tiếp trên `main` cho đến khi toàn bộ request path đã có policy tương ứng.
 - Public schema và các bảng public đang thuộc owner `neondb_owner`; chưa có application runtime role riêng.
 - Vercel environment-name audit read-only: Production hiện có `DATABASE_URL`/`DATABASE_URL_UNPOOLED` nhưng chưa có `DATABASE_URL_RUNTIME`; Preview chưa có environment variables. Không suy ra least privilege từ việc project đã liên kết với Neon.
-- `npm run db:drift` đã được thêm để so sánh migration snapshot với live Neon. Main hiện không có `__drizzle_migrations`, nên strict migration-tag verification vẫn là blocker vận hành cần xử lý trong một migration/recovery change được duyệt.
+- `npm run db:drift` đã được thêm để so sánh migration snapshot với live Neon, gồm cả hash/timestamp của từng journal entry. Main hiện không có `drizzle.__drizzle_migrations`, nên strict migration-tag verification vẫn là blocker vận hành cần xử lý trong một migration/recovery change được duyệt.
 
 Kết luận: tenant isolation hiện được thực thi ở service/query layer. Đây là defense-in-depth đang chạy, nhưng chưa thể tuyên bố database-level isolation hoàn tất.
 
@@ -32,6 +32,8 @@ Branch thử nghiệm `br-empty-scene-afpgv9al` đã được tạo từ main. T
 - policy mẫu cho `public.users` dựa trên `current_setting('app.user_id', true)`.
 
 Các thay đổi này chỉ tồn tại trên branch thử nghiệm. Chưa có role/RLS nào được áp dụng vào Neon main và chưa đổi Vercel environment variable.
+
+Migration-journal rehearsal riêng trên `br-quiet-meadow-afkk2sia` đã pass strict drift với đủ 3 entry khớp file local; branch đã được xoá sau khi đối chiếu schema. Kết quả này chứng minh quy trình baseline có thể thực hiện, không phải bằng chứng rằng main đã được sửa.
 
 ## Điều kiện để áp dụng main
 

@@ -36,4 +36,5 @@ Trong lần kiểm thử integration ngày 2026-08-18, branch tạm `br-cold-gla
 ## Kiểm tra tự động
 
 - `npm run security:routes` kiểm kê mọi mutation route dưới `src/app/api`, yêu cầu policy same-origin dùng chung và `no-store`; chỉ cho phép ngoại lệ auth handler và signed Vercel Blob callback.
-- `npm run db:drift` so sánh bảng/cột/index/enum trong migration snapshot với Neon. Khi CI bật `ENABLE_DB_VERIFY=true`, `REQUIRE_MIGRATION_JOURNAL=true` sẽ làm pipeline fail nếu migration journal chưa được tạo/khôi phục; không tự ý tạo journal trên main trong phase này.
+- `npm run db:drift` so sánh bảng/cột/index/enum trong migration snapshot với Neon và đối chiếu cả SHA-256/timestamp của từng entry trong `drizzle.__drizzle_migrations`. Khi CI bật `ENABLE_DB_VERIFY=true`, `REQUIRE_MIGRATION_JOURNAL=true` sẽ làm pipeline fail nếu journal thiếu hoặc entry không khớp; không tự ý tạo journal trên main trong phase này.
+- Migration-journal rehearsal ngày 2026-08-18 trên branch tạm `br-quiet-meadow-afkk2sia` đã tạo đúng schema `drizzle`, ghi đủ 3 migration hash/timestamp và trả strict drift `0`; schema diff chỉ gồm journal schema/table/sequence. Branch được xoá sau khi verify, không ghi main.
