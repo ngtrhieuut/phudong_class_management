@@ -66,6 +66,7 @@ test("public shell exposes safe PWA assets and security headers", async ({ reque
   const csp = response.headers()["content-security-policy"];
   expect(csp).toContain("default-src 'self'");
   expect(csp).toContain("strict-dynamic");
+  expect(csp).toContain("https://*.blob.vercel-storage.com");
   expect(response.headers()["strict-transport-security"]).toContain("max-age=63072000");
 });
 

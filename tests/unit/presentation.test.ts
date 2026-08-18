@@ -27,7 +27,7 @@ describe('student presentation', () => {
     expect(toStudentPresentation({ ...baseRow, taskStatus: 'not_started' }).taskStatus).toBe('Chưa bắt đầu');
   });
 
-  it('keeps the persisted avatar URL for dashboard cards', () => {
-    expect(toStudentPresentation({ ...baseRow, taskStatus: 'not_started', avatarUrl: '/avatars/female-02.png' }).avatarUrl).toBe('/avatars/female-02.png');
+  it('normalizes a legacy persisted avatar URL for dashboard cards', () => {
+    expect(toStudentPresentation({ ...baseRow, taskStatus: 'not_started', avatarUrl: '/avatars/female-02.png' }).avatarUrl).toBe('/avatars/female-02.webp');
   });
 });

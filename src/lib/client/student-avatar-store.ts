@@ -1,14 +1,14 @@
 import type { DemoStudent } from "@/lib/demo-data";
 
+import { normalizeAvatarPresetUrl } from "@/lib/avatar-presets";
+
 const STORAGE_KEY = "phudong.student-avatar-updates.v1";
 
 type AvatarUpdate = { url: string | null; savedAt: number };
 type AvatarUpdates = Record<string, AvatarUpdate>;
 
 function normalizeAvatarUrl(value: string | null): string | null {
-  if (!value) return value;
-  const legacyPath = value.match(/^\/avatars\/(male|female)-(0[1-5])\.png$/);
-  return legacyPath ? `/avatars/${legacyPath[1]}-${legacyPath[2]}.webp` : value;
+  return normalizeAvatarPresetUrl(value) ?? null;
 }
 
 function readUpdates(): AvatarUpdates {

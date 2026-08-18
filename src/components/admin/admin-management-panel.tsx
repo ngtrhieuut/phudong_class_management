@@ -14,7 +14,7 @@ type AdminClass = {
   homeroomTeacherId: string | null;
   settingsJson?: Record<string, unknown>;
 };
-type Member = { userId: string; displayName: string; email: string | null; role: "admin" | "teacher" | "staff"; organizationId: string };
+type Member = { userId: string; displayName: string; email: string | null; status: "active" | "invited" | "suspended" | "archived"; role: "admin" | "teacher" | "staff"; organizationId: string };
 type ClassAccess = { classId: string; userId: string; role: "homeroom_teacher" | "teacher" | "assistant" };
 
 export function AdminManagementPanel({
@@ -44,7 +44,7 @@ export function AdminManagementPanel({
 
   const selectedClass = classes.find((item) => item.id === selectedClassId);
   const selectedClassAccess = classAccess.filter((item) => item.classId === selectedClassId);
-  const teacherCandidates = members.filter((member) => member.role === "teacher" || member.role === "admin");
+  const teacherCandidates = members.filter((member) => member.status === "active" && (member.role === "teacher" || member.role === "admin"));
 
   async function execute(action: Record<string, unknown>) {
     setBusy(true);
@@ -82,6 +82,18 @@ export function AdminManagementPanel({
       startsAt: String(form.get("startsAt") || ""),
       endsAt: String(form.get("endsAt") || ""),
       active: form.get("active") === "on",
+    });
+    if (saved) event.currentTarget.reset();
+  }
+
+  async function inviteMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const saved = await execute({
+      action: "member.invite",
+      email: String(form.get("email") || ""),
+      displayName: String(form.get("displayName") || "") || undefined,
+      role: String(form.get("role") || "teacher"),
     });
     if (saved) event.currentTarget.reset();
   }
@@ -160,7 +172,7 @@ export function AdminManagementPanel({
             {schoolYears.map((year) => (
               <li key={year.id} className="flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-low)] px-3 py-2 font-body text-sm">
                 <span>{year.name}</span>
-                <span className="flex items-center gap-2"><span className="font-heading text-xs font-bold text-[var(--primary)]">{year.active ? "active" : "archived"}</span>{year.active ? <button type="button" disabled={busy} onClick={() => { if (window.confirm(`Lưu trữ năm học ${year.name}? Các lớp thuộc năm này sẽ không còn xuất hiện trong luồng giáo viên.`)) void execute({ action: "school-year.archive", id: year.id, confirmation: "ARCHIVE" }); }} className="rounded-full bg-[var(--needs-improvement-soft)] px-3 py-1 font-heading text-xs font-bold text-[var(--needs-improvement)]">Lưu trữ</button> : null}</span>
+                <span className="flex items-center gap-2"><span className="font-heading text-xs font-bold text-[var(--primary)]">{year.active ? "active" : "archived"}</span>{year.active ? <button type="button" disabled={busy} onClick={() => { if (window.confirm(`Lưu trữ năm học ${year.name}? Các lớp thuộc năm này sẽ không còn xuất hiện trong luồng giáo viên.`)) void execute({ action: "school-year.archive", id: year.id, confirmation: "ARCHIVE" }); }} className="rounded-full bg-[var(--needs-improvement-soft)] px-3 py-1 font-heading text-xs font-bold text-[var(--needs-improvement)]">Lưu trữ</button> : <button type="button" disabled={busy} onClick={() => { if (window.confirm(`Kích hoạt năm học ${year.name}?`)) void execute({ action: "school-year.save", id: year.id, name: year.name, startsAt: new Date(year.startsAt).toISOString().slice(0, 10), endsAt: new Date(year.endsAt).toISOString().slice(0, 10), active: true }); }} className="rounded-full bg-[var(--primary-fixed)] px-3 py-1 font-heading text-xs font-bold text-[var(--primary)]">Kích hoạt</button>}</span>
               </li>
             ))}
           </ul>
@@ -197,10 +209,20 @@ export function AdminManagementPanel({
       <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow">
         <h2 className="font-heading text-xl font-bold">Thành viên và quyền</h2>
         <p className="mt-2 font-body text-sm text-[var(--on-surface-variant)]">Role update, class-level grant/revoke và deactivate đều kiểm tra tenant ở server. Revoke/deactivate yêu cầu xác nhận.</p>
+        <form onSubmit={inviteMember} className="mt-4 grid gap-2 rounded-2xl border border-[var(--primary-fixed)] bg-[var(--surface-low)] p-4 sm:grid-cols-[1fr_1fr_150px_auto]">
+          <input name="email" type="email" required placeholder="email giáo viên" className="min-h-10 rounded-xl bg-[var(--surface-lowest)] px-3 text-sm" />
+          <input name="displayName" placeholder="Tên hiển thị (tùy chọn)" className="min-h-10 rounded-xl bg-[var(--surface-lowest)] px-3 text-sm" />
+          <select name="role" defaultValue="teacher" className="min-h-10 rounded-xl bg-[var(--surface-lowest)] px-3 text-sm"><option value="teacher">teacher</option><option value="admin">admin</option><option value="staff">staff</option></select>
+          <button disabled={busy} className="min-h-10 rounded-full bg-[var(--primary)] px-4 font-heading text-xs font-bold text-white disabled:opacity-50">Mời thành viên</button>
+        </form>
+        <p className="mt-2 font-body text-xs text-[var(--on-surface-variant)]">Thành viên được mời sẽ hoàn tất đăng ký bằng đúng email này; hệ thống sẽ tự nhận membership đã cấp.</p>
         <div className="mt-4 space-y-2">
-          {members.map((member) => <div key={member.userId} className="flex flex-col gap-2 rounded-xl bg-[var(--surface-low)] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-heading text-sm font-bold">{member.displayName}</p><p className="font-body text-xs text-[var(--on-surface-variant)]">{member.email || "—"}</p></div><div className="flex flex-wrap gap-2"><select value={member.role} disabled={busy} onChange={(event) => void execute({ action: "member.role", userId: member.userId, role: event.target.value })} className="min-h-10 rounded-full bg-[var(--surface-lowest)] px-3 font-body text-xs"><option value="admin">admin</option><option value="teacher">teacher</option><option value="staff">staff</option></select><button type="button" disabled={busy} onClick={() => { if (window.confirm(`Thu hồi quyền của ${member.displayName}?`)) void execute({ action: "member.revoke", userId: member.userId, confirmation: "REVOKE" }); }} className="rounded-full bg-[var(--needs-improvement-soft)] px-3 py-2 font-heading text-xs font-bold text-[var(--needs-improvement)]">Revoke</button><button type="button" disabled={busy} onClick={() => { if (window.confirm(`Tạm khóa tài khoản ${member.displayName}?`)) void execute({ action: "member.deactivate", userId: member.userId, confirmation: "DEACTIVATE" }); }} className="rounded-full bg-[var(--needs-improvement-soft)] px-3 py-2 font-heading text-xs font-bold text-[var(--needs-improvement)]">Tạm khóa</button></div></div>)}
+          {members.map((member) => {
+            const pending = member.status === "invited";
+            return <div key={member.userId} className="flex flex-col gap-2 rounded-xl bg-[var(--surface-low)] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-heading text-sm font-bold">{member.displayName}</p><p className="font-body text-xs text-[var(--on-surface-variant)]">{member.email || "—"} · {pending ? "chờ đăng ký" : member.status}</p></div><div className="flex flex-wrap gap-2">{pending ? <span className="rounded-full bg-[var(--primary-fixed)] px-3 py-2 font-heading text-xs font-bold text-[var(--primary)]">Đã mời · {member.role}</span> : <><select value={member.role} disabled={busy} onChange={(event) => { if (window.confirm(`Đổi role của ${member.displayName} sang ${event.target.value}?`)) void execute({ action: "member.role", userId: member.userId, role: event.target.value }); }} className="min-h-10 rounded-full bg-[var(--surface-lowest)] px-3 font-body text-xs"><option value="admin">admin</option><option value="teacher">teacher</option><option value="staff">staff</option></select><button type="button" disabled={busy} onClick={() => { if (window.confirm(`Thu hồi quyền của ${member.displayName}?`)) void execute({ action: "member.revoke", userId: member.userId, confirmation: "REVOKE" }); }} className="rounded-full bg-[var(--needs-improvement-soft)] px-3 py-2 font-heading text-xs font-bold text-[var(--needs-improvement)]">Revoke</button><button type="button" disabled={busy} onClick={() => { if (window.confirm(`Tạm khóa tài khoản ${member.displayName}?`)) void execute({ action: "member.deactivate", userId: member.userId, confirmation: "DEACTIVATE" }); }} className="rounded-full bg-[var(--needs-improvement-soft)] px-3 py-2 font-heading text-xs font-bold text-[var(--needs-improvement)]">Tạm khóa</button></>}</div></div>;
+          })}
         </div>
-        <form onSubmit={grantClassAccess} className="mt-5 grid gap-2 rounded-2xl border border-[var(--primary-fixed)] bg-[var(--surface-low)] p-4 sm:grid-cols-[1fr_1fr_auto]"><select name="userId" required defaultValue="" className="min-h-10 rounded-xl bg-[var(--surface-lowest)] px-3"><option value="">Cấp quyền cho thành viên...</option>{members.map((member) => <option key={member.userId} value={member.userId}>{member.displayName}</option>)}</select><select name="role" defaultValue="teacher" className="min-h-10 rounded-xl bg-[var(--surface-lowest)] px-3"><option value="teacher">teacher</option><option value="assistant">assistant</option></select><button disabled={busy || !selectedClassId} className="min-h-10 rounded-full bg-[var(--primary)] px-4 font-heading text-xs font-bold text-white">Cấp vào lớp</button></form>
+        <form onSubmit={grantClassAccess} className="mt-5 grid gap-2 rounded-2xl border border-[var(--primary-fixed)] bg-[var(--surface-low)] p-4 sm:grid-cols-[1fr_1fr_auto]"><select name="userId" required defaultValue="" className="min-h-10 rounded-xl bg-[var(--surface-lowest)] px-3"><option value="">Cấp quyền cho thành viên...</option>{members.filter((member) => member.status === "active").map((member) => <option key={member.userId} value={member.userId}>{member.displayName}</option>)}</select><select name="role" defaultValue="teacher" className="min-h-10 rounded-xl bg-[var(--surface-lowest)] px-3"><option value="teacher">teacher</option><option value="assistant">assistant</option></select><button disabled={busy || !selectedClassId} className="min-h-10 rounded-full bg-[var(--primary)] px-4 font-heading text-xs font-bold text-white">Cấp vào lớp</button></form>
         <div className="mt-3 space-y-2">{selectedClassAccess.map((access) => { const member = members.find((item) => item.userId === access.userId); return <div key={`${access.classId}-${access.userId}`} className="flex items-center justify-between rounded-xl bg-[var(--surface-low)] px-3 py-2 font-body text-sm"><span>{member?.displayName ?? access.userId} · {access.role}</span><button type="button" disabled={busy} onClick={() => { if (window.confirm("Thu hồi quyền truy cập lớp này?")) void execute({ action: "member.class-access", classId: access.classId, userId: access.userId, role: access.role === "homeroom_teacher" ? "teacher" : access.role, enabled: false }); }} className="rounded-full bg-[var(--needs-improvement-soft)] px-3 py-1 font-heading text-xs font-bold text-[var(--needs-improvement)]">Thu hồi</button></div>; })}</div>
       </div>
 

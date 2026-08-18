@@ -48,6 +48,12 @@ const onboardingSchema = z.object({
     name: z.string().trim().min(1).max(80),
     grade: z.number().int().min(1).max(5),
   }),
+  configuration: z.object({
+    behaviorPreset: z.enum(["standard", "simple"]).default("standard"),
+    levelPreset: z.enum(["standard", "simple"]).default("standard"),
+    badgePreset: z.enum(["standard", "simple"]).default("standard"),
+    rewardPreset: z.enum(["standard", "simple"]).default("standard"),
+  }).default({ behaviorPreset: "standard", levelPreset: "standard", badgePreset: "standard", rewardPreset: "standard" }),
   students: z.array(studentSchema).max(200).default([]),
 });
 
@@ -91,6 +97,28 @@ const defaultRewards = [
   { name: "Tuyên dương đặc biệt", description: "Một lời tuyên dương nổi bật trong tuần.", rewardType: "recognition" as const, costStars: 50, stock: null },
 ];
 
+const simpleBehaviors = [
+  { name: "Nỗ lực học tập", category: "positive" as const, defaultPoints: 5, icon: "sparkle", dailyLimit: 3 },
+  { name: "Giúp đỡ bạn bè", category: "positive" as const, defaultPoints: 3, icon: "heart", dailyLimit: 3 },
+  { name: "Cần cố gắng", category: "needs_improvement" as const, defaultPoints: -3, icon: "clock", dailyLimit: 2 },
+];
+
+const simpleLevels = [
+  { name: "Khởi đầu", minScore: 0, maxScore: 49, sortOrder: 0 },
+  { name: "Tiến bộ", minScore: 50, maxScore: 149, sortOrder: 1 },
+  { name: "Ngôi sao lớp học", minScore: 150, maxScore: null, sortOrder: 2 },
+];
+
+const simpleBadges = [
+  { name: "Nỗ lực mỗi ngày", description: "Luôn cố gắng hoàn thành việc học.", iconUrl: "/badges/homework.svg" },
+  { name: "Bạn tốt", description: "Biết quan tâm và giúp đỡ bạn bè.", iconUrl: "/badges/helping.svg" },
+];
+
+const simpleRewards = [
+  { name: "Chọn chỗ ngồi yêu thích", description: "Được chọn chỗ ngồi cho một tiết học.", rewardType: "privilege" as const, costStars: 20, stock: null },
+  { name: "Tuyên dương đặc biệt", description: "Một lời tuyên dương nổi bật trong tuần.", rewardType: "recognition" as const, costStars: 50, stock: null },
+];
+
 function dateAtUtc(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(date.valueOf())) throw new OnboardingError("INVALID_INPUT", "Ngày trong hồ sơ lớp không hợp lệ.");
@@ -111,16 +139,25 @@ export function parseTeacherOnboardingInput(input: unknown): OnboardingInput {
   return parsed.data;
 }
 
-async function seedClassConfiguration(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], classId: string, organizationId: string) {
+async function seedClassConfiguration(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  classId: string,
+  organizationId: string,
+  configuration: OnboardingInput["configuration"],
+) {
   await tx.insert(classRoles).values([
     { classId, name: "Lớp trưởng", icon: "crown", sortOrder: 0 },
     { classId, name: "Lớp phó", icon: "star", sortOrder: 1 },
     { classId, name: "Tổ trưởng", icon: "users", sortOrder: 2 },
   ]).onConflictDoNothing();
-  await tx.insert(behaviorTemplates).values(defaultBehaviors.map((behavior) => ({ ...behavior, classId, organizationId }))).onConflictDoNothing();
-  await tx.insert(levelDefinitions).values(defaultLevels.map((level) => ({ ...level, classId }))).onConflictDoNothing();
-  await tx.insert(badgeDefinitions).values(defaultBadges.map((badge) => ({ ...badge, classId, active: true }))).onConflictDoNothing();
-  await tx.insert(rewards).values(defaultRewards.map((reward) => ({ ...reward, classId, active: true }))).onConflictDoNothing();
+  const behaviors = configuration.behaviorPreset === "simple" ? simpleBehaviors : defaultBehaviors;
+  const levels = configuration.levelPreset === "simple" ? simpleLevels : defaultLevels;
+  const badges = configuration.badgePreset === "simple" ? simpleBadges : defaultBadges;
+  const rewardsPreset = configuration.rewardPreset === "simple" ? simpleRewards : defaultRewards;
+  await tx.insert(behaviorTemplates).values(behaviors.map((behavior) => ({ ...behavior, classId, organizationId }))).onConflictDoNothing();
+  await tx.insert(levelDefinitions).values(levels.map((level) => ({ ...level, classId }))).onConflictDoNothing();
+  await tx.insert(badgeDefinitions).values(badges.map((badge) => ({ ...badge, classId, active: true }))).onConflictDoNothing();
+  await tx.insert(rewards).values(rewardsPreset.map((reward) => ({ ...reward, classId, active: true }))).onConflictDoNothing();
 }
 
 export async function getOnboardingState(userId: string) {
@@ -179,7 +216,7 @@ export async function completeTeacherOnboarding(input: unknown, actorUserId: str
     if (!classRow) throw new OnboardingError("CONFLICT", "Không thể tạo lớp học.");
     await tx.update(classes).set({ grade: value.classroom.grade, homeroomTeacherId: actorUserId, settingsJson: { ...(existingClass?.settingsJson ?? {}), archived: false }, updatedAt: new Date() }).where(and(eq(classes.id, classRow.id), eq(classes.organizationId, organizationId), eq(classes.schoolYearId, schoolYear.id)));
     await tx.insert(classMemberships).values({ classId: classRow.id, userId: actorUserId, role: "homeroom_teacher" }).onConflictDoUpdate({ target: [classMemberships.classId, classMemberships.userId], set: { role: "homeroom_teacher", updatedAt: new Date() } });
-    await seedClassConfiguration(tx, classRow.id, organizationId);
+    await seedClassConfiguration(tx, classRow.id, organizationId, value.configuration);
 
     const normalizedStudents = value.students.map((student) => ({ ...student, studentCode: normalizeCode(student.studentCode), birthDate: student.birthDate || null, gender: student.gender || "undisclosed" as const, seatNo: student.seatNo ?? null, groupName: student.groupName || null, avatarUrl: student.avatarUrl || null }));
     const codes = new Set<string>();
@@ -197,7 +234,7 @@ export async function completeTeacherOnboarding(input: unknown, actorUserId: str
       await tx.insert(studentScoreSnapshots).values({ classId: classRow.id, studentId, lifetimeScore: 0, spendableStars: 0 }).onConflictDoNothing();
     }
 
-    await tx.insert(auditLogs).values({ organizationId, actorUserId, entityType: "teacher_onboarding", entityId: classRow.id, action: "completed", afterJson: { organizationCreated, schoolYearId: schoolYear.id, classId: classRow.id, studentCount: normalizedStudents.length, presetsSeeded: true } });
+    await tx.insert(auditLogs).values({ organizationId, actorUserId, entityType: "teacher_onboarding", entityId: classRow.id, action: "completed", afterJson: { organizationCreated, schoolYearId: schoolYear.id, classId: classRow.id, studentCount: normalizedStudents.length, presetsSeeded: true, configuration: value.configuration } });
     return { organizationId, schoolYearId: schoolYear.id, classId: classRow.id, studentCount: normalizedStudents.length };
   });
 }

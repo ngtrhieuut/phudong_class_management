@@ -23,3 +23,13 @@ export const avatarPresets: readonly AvatarPreset[] = [
 export function isAvatarPresetUrl(value: string | null | undefined): value is string {
   return Boolean(value && avatarPresets.some((preset) => preset.url === value));
 }
+
+/**
+ * Keep server-rendered cards compatible with the old PNG database values
+ * while all new writes and public assets use WebP.
+ */
+export function normalizeAvatarPresetUrl(value: string | null | undefined): string | null | undefined {
+  if (!value) return value;
+  const legacyPath = value.match(/^\/avatars\/(male|female)-(0[1-5])\.png$/u);
+  return legacyPath ? `/avatars/${legacyPath[1]}-${legacyPath[2]}.webp` : value;
+}

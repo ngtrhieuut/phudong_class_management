@@ -18,4 +18,12 @@ describe("teacher onboarding validation", () => {
   it("rejects grades outside the product scope", () => {
     expect(() => parseTeacherOnboardingInput({ ...baseInput, classroom: { ...baseInput.classroom, grade: 6 } })).toThrow(OnboardingError);
   });
+
+  it("accepts lightweight configuration presets without requiring per-field setup", () => {
+    const parsed = parseTeacherOnboardingInput({
+      ...baseInput,
+      configuration: { behaviorPreset: "simple", levelPreset: "simple", badgePreset: "standard", rewardPreset: "simple" },
+    });
+    expect(parsed.configuration).toEqual({ behaviorPreset: "simple", levelPreset: "simple", badgePreset: "standard", rewardPreset: "simple" });
+  });
 });

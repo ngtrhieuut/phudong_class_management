@@ -33,6 +33,10 @@ export class AdminServiceError extends Error {
   }
 }
 
+export function parseAdminAction(input: unknown) {
+  return adminActionSchema.safeParse(input);
+}
+
 function dateAtUtc(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(date.valueOf())) throw new AdminServiceError("INVALID_INPUT", "Ngày không hợp lệ.");
@@ -54,7 +58,7 @@ async function audit(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], ac
 }
 
 export async function executeAdminAction(input: unknown, actorUserId: string) {
-  const parsed = adminActionSchema.safeParse(input);
+  const parsed = parseAdminAction(input);
   if (!parsed.success) throw new AdminServiceError("INVALID_INPUT", parsed.error.issues[0]?.message ?? "Thao tác quản trị không hợp lệ.");
   const action = parsed.data;
   return db.transaction(async (tx) => {

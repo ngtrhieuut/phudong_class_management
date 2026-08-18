@@ -3,6 +3,7 @@ import type {
   ClassStudentRow,
   TeacherDashboardData,
 } from "@/lib/classroom/queries";
+import { normalizeAvatarPresetUrl } from "@/lib/avatar-presets";
 
 type LevelRow = {
   id: string;
@@ -73,7 +74,7 @@ function toDemoStudent(row: ClassStudentRow, levels: readonly LevelRow[], index:
     group: row.groupName?.trim() || "Chưa phân tổ",
     classRole: row.classRoleName?.trim() || undefined,
     classRoleId: row.classRoleId,
-    avatarUrl: row.avatarUrl,
+    avatarUrl: normalizeAvatarPresetUrl(row.avatarUrl),
     birthDate: row.birthDate,
     gender: row.gender,
     guardians: row.guardians ?? [],

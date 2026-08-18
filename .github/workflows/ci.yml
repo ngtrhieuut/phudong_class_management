@@ -29,6 +29,8 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
       - name: Migration consistency check
         run: npm run db:check
+      - name: API security inventory
+        run: npm run security:routes
       - name: Live Neon schema contract check
         if: ${{ vars.ENABLE_DB_VERIFY == 'true' }}
         env:
@@ -45,6 +47,14 @@ jobs:
             fi
           done
           npm run db:verify
+      - name: Live Neon migration drift check
+        if: ${{ vars.ENABLE_DB_VERIFY == 'true' }}
+        env:
+          DATABASE_URL_RUNTIME: ${{ secrets.E2E_DATABASE_URL_RUNTIME }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.E2E_DATABASE_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+          REQUIRE_MIGRATION_JOURNAL: "true"
+        run: npm run db:drift
       - name: Live Neon schema contract notice
         if: ${{ vars.ENABLE_DB_VERIFY != 'true' }}
         run: echo "::notice title=Live Neon schema check not enabled::Set repository variable ENABLE_DB_VERIFY=true and an isolated Neon verification connection to run db:verify in CI."

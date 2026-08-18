@@ -11,6 +11,7 @@ Ngày kiểm tra live: 2026-08-18 (Asia/Ho_Chi_Minh).
 - 28 bảng trong `public` hiện chưa bật RLS và chưa có policy. Không được bật RLS trực tiếp trên `main` cho đến khi toàn bộ request path đã có policy tương ứng.
 - Public schema và các bảng public đang thuộc owner `neondb_owner`; chưa có application runtime role riêng.
 - Vercel environment-name audit read-only: Production hiện có `DATABASE_URL`/`DATABASE_URL_UNPOOLED` nhưng chưa có `DATABASE_URL_RUNTIME`; Preview chưa có environment variables. Không suy ra least privilege từ việc project đã liên kết với Neon.
+- `npm run db:drift` đã được thêm để so sánh migration snapshot với live Neon. Main hiện không có `__drizzle_migrations`, nên strict migration-tag verification vẫn là blocker vận hành cần xử lý trong một migration/recovery change được duyệt.
 
 Kết luận: tenant isolation hiện được thực thi ở service/query layer. Đây là defense-in-depth đang chạy, nhưng chưa thể tuyên bố database-level isolation hoàn tất.
 
@@ -50,6 +51,8 @@ Cho đến khi approval và test này hoàn tất, báo cáo phải ghi rõ: **R
 Fixture phải là tài khoản/test data riêng, không dùng tài khoản giáo viên hoặc dữ liệu học sinh production. Bộ fixture đầy đủ gồm hai class/teacher scope, child được phép và child ngoài scope, media ngoài scope, revoked/canView=false guardian, foreign organization, các invitation token theo từng trạng thái, và balance-limited reward fixtures. Sau mỗi lần chạy cần kiểm tra cleanup/idempotency key và giữ lại trace khi test retry thất bại.
 
 `npm run db:verify` là schema-contract check read-only đối với Neon connection được chọn. CI chỉ chạy live check khi repository variable `ENABLE_DB_VERIFY=true`; khi bật phải cung cấp runtime connection riêng qua `DATABASE_URL_RUNTIME`, không dùng migration/owner URL làm application verification role.
+
+`npm run security:routes` là gate tĩnh cho centralized same-origin/no-store policy trên toàn bộ API mutation route. Auth SDK route và signed Blob callback là hai ngoại lệ có giao thức xác thực riêng.
 
 Video upload đang bị disable fail-closed trong production. Ảnh được re-encode WebP và loại metadata; video chỉ được mở lại sau khi có worker quarantine/transcode/output verification riêng, không xử lý giả định trong Vercel request path.
 

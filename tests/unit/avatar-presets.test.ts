@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { avatarPresets, isAvatarPresetUrl } from "@/lib/avatar-presets";
+import { avatarPresets, isAvatarPresetUrl, normalizeAvatarPresetUrl } from "@/lib/avatar-presets";
 
 describe("avatar presets", () => {
   it("provides five male and five female local icon templates", () => {
@@ -14,5 +14,11 @@ describe("avatar presets", () => {
     expect(isAvatarPresetUrl("/avatars/male-01.png")).toBe(false);
     expect(isAvatarPresetUrl("https://example.com/avatar.png")).toBe(false);
     expect(isAvatarPresetUrl("/avatars/unknown.png")).toBe(false);
+  });
+
+  it("normalizes legacy server-rendered PNG paths to the current WebP assets", () => {
+    expect(normalizeAvatarPresetUrl("/avatars/male-01.png")).toBe("/avatars/male-01.webp");
+    expect(normalizeAvatarPresetUrl("/avatars/female-05.png")).toBe("/avatars/female-05.webp");
+    expect(normalizeAvatarPresetUrl(null)).toBeNull();
   });
 });

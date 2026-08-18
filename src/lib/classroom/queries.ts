@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 
 import { db } from "@/db";
+import { normalizeAvatarPresetUrl } from "@/lib/avatar-presets";
 import { operationalClassCondition } from "@/lib/classroom/access";
 import { getVietnamDayRange } from "@/lib/time/vietnam";
 import {
@@ -274,6 +275,7 @@ export async function getClassStudents(
   const taskStatusByStudent = new Map(taskStatusRows.map((row) => [row.studentId, row.taskStatus]));
   return studentRows.map((student) => ({
     ...student,
+    avatarUrl: normalizeAvatarPresetUrl(student.avatarUrl),
     guardians: guardiansByStudent.get(student.id) ?? [],
     taskStatus: taskStatusByStudent.get(student.id) ?? "not_started",
   }));
@@ -285,7 +287,7 @@ export async function getClassStudentAvatars(userId: string, classId: string) {
     throw new Error("FORBIDDEN_CLASS_ACCESS");
   }
 
-  return db
+  const rows = await db
     .select({ id: students.id, avatarUrl: students.avatarUrl })
     .from(classStudents)
     .innerJoin(students, eq(students.id, classStudents.studentId))
@@ -298,6 +300,7 @@ export async function getClassStudentAvatars(userId: string, classId: string) {
       ),
     )
     .orderBy(asc(students.fullName));
+  return rows.map((row) => ({ ...row, avatarUrl: normalizeAvatarPresetUrl(row.avatarUrl) }));
 }
 
 export async function getTeacherStudentProfile(userId: string, studentId: string, classId?: string) {
@@ -494,7 +497,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
       .orderBy(asc(classRoles.sortOrder), asc(classRoles.name)),
   ]);
 
-  return { classContext, profile, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown, guardians: guardianRows, classRoles: classRoleOptions };
+  return { classContext, profile: { ...profile, avatarUrl: normalizeAvatarPresetUrl(profile.avatarUrl) }, scores, badges, badgeOptions, levels, weeklyTrend, monthlyTrend, behaviorBreakdown, guardians: guardianRows, classRoles: classRoleOptions };
 }
 
 export async function getTeacherDashboardData(

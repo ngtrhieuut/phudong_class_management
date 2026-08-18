@@ -17,3 +17,14 @@
 - Media praise lưu private; ảnh được server re-encode WebP và loại metadata nguồn. Video production hiện bị từ chối fail-closed vì chưa có pipeline transcode và metadata stripping được kiểm chứng.
 - Export phải có audit và bảo vệ CSV formula injection; không đưa secret hoặc dữ liệu ngoài phạm vi vào file.
 - Retention period cụ thể phải được nhà trường phê duyệt. Khi có policy, chạy deletion/archive job theo organization, cleanup object storage và chỉ ghi aggregate result.
+
+## Lifecycle mặc định (chưa tự động xóa production)
+
+- **Guardian invitation:** token chỉ lưu hash; invitation `accepted`, `expired` hoặc `revoked` được giữ tối thiểu 90 ngày cho điều tra rồi mới xem xét purge aggregate sau khi trường duyệt.
+- **Notifications:** giữ tối đa 180 ngày sau khi `read_at`; notification chưa đọc không bị xóa tự động.
+- **Media:** media của học sinh archived/revoked được application-deny ngay; giữ object/metadata tối đa 90 ngày để phục hồi có kiểm soát, sau đó admin chạy reconcile + deletion workflow thủ công.
+- **Audit logs:** giữ tối thiểu 24 tháng hoặc theo chính sách nhà trường; không cascade-delete khi archive student/class.
+- **Archived classes/students:** giữ lịch sử điểm, redemption và audit; chỉ xóa PII/media theo quyết định retention riêng, không hard-delete trong ứng dụng thường ngày.
+- **Inactive guardians:** giữ liên kết và audit để không phá lịch sử; revoke quyền xem trước, purge chỉ qua quy trình được duyệt.
+
+Các khoảng thời gian trên là baseline vận hành, không thay thế chính sách pháp lý/nhà trường. `scripts/reconcile-media.ts` mặc định dry-run; không có job production tự động xóa trong phase này.

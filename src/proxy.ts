@@ -3,6 +3,15 @@ import { auth, authConfigured } from "@/lib/auth/server";
 
 function contentSecurityPolicy(nonce: string) {
   const isDevelopment = process.env.NODE_ENV === "development";
+  const connectSources = ["'self'", "https://*.neon.tech", "https://*.blob.vercel-storage.com"];
+  if (process.env.NEON_AUTH_BASE_URL) {
+    try {
+      const authOrigin = new URL(process.env.NEON_AUTH_BASE_URL).origin;
+      if (!connectSources.includes(authOrigin)) connectSources.push(authOrigin);
+    } catch {
+      // Invalid optional auth configuration is handled by the auth guard.
+    }
+  }
 
   return [
     "default-src 'self'",
@@ -11,7 +20,7 @@ function contentSecurityPolicy(nonce: string) {
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.neon.tech",
+    `connect-src ${connectSources.join(" ")}`,
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
