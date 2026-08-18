@@ -183,15 +183,7 @@ export function AvatarTemplatePicker({
   );
 }
 
-export function StudentAvatarPicker({
-  classId,
-  studentId,
-  value,
-  gender,
-  fallback,
-  size,
-  onChanged,
-}: {
+type StudentAvatarPickerProps = {
   classId: string;
   studentId: string;
   value?: string | null;
@@ -199,7 +191,24 @@ export function StudentAvatarPicker({
   fallback?: ReactNode;
   size?: number;
   onChanged?: (url: string) => void;
-}) {
+};
+
+export function StudentAvatarPicker(props: StudentAvatarPickerProps) {
+  // Reset the stateful picker when the persisted server value changes. This
+  // avoids copying props into state inside an effect while still allowing the
+  // picker to show the new avatar immediately after a successful save.
+  return <StudentAvatarPickerState key={`${props.studentId}:${props.value ?? ""}`} {...props} />;
+}
+
+function StudentAvatarPickerState({
+  classId,
+  studentId,
+  value,
+  gender,
+  fallback,
+  size,
+  onChanged,
+}: StudentAvatarPickerProps) {
   const router = useRouter();
   const [avatarUrl, setAvatarUrl] = useState(value ?? null);
 
