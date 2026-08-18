@@ -12,5 +12,5 @@ export default async function TeacherOnboardingPage() {
   if (state.completed) {
     return <main className="min-h-[100dvh] bg-[var(--surface)] p-6"><div className="mx-auto max-w-xl rounded-[2rem] bg-[var(--surface-lowest)] p-8 text-center soft-shadow"><h1 className="font-heading text-3xl font-bold text-[var(--primary)]">Lớp học đã sẵn sàng</h1><p className="mt-3 font-body leading-7 text-[var(--on-surface-variant)]">Bạn đã hoàn tất khởi tạo lớp. Hãy quay về dashboard để bắt đầu quản lý.</p><a href="/teacher/dashboard" className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full bg-[var(--primary)] px-5 font-heading text-sm font-bold text-white">Mở dashboard</a></div></main>;
   }
-  return <TeacherOnboardingForm initialOrganizationName={state.organization?.organizationName ?? user.displayName} />;
+  return <TeacherOnboardingForm initialOrganizationName={state.organization?.organizationName ?? user.displayName} initialSchoolYearName={state.classContext?.schoolYearName} initialClassName={state.classContext?.name} initialGrade={state.classContext?.grade ? String(state.classContext.grade) : undefined} />;
 }

@@ -42,6 +42,12 @@ Các thay đổi này chỉ tồn tại trên branch thử nghiệm. Chưa có r
 
 Cho đến khi approval và test này hoàn tất, báo cáo phải ghi rõ: **RLS production chưa bật; app-layer authorization đang là boundary chính**.
 
+## Authenticated integration gate
+
+`tests/e2e/authenticated-security.spec.ts` kiểm tra teacher/guardian/admin boundary và retry idempotency cho score/reward. CI chỉ chạy suite này khi repository variable `ENABLE_AUTH_E2E=true` và toàn bộ fixture secrets `E2E_*` cùng connection/auth secrets đã được cấu hình. Khi chưa có fixture riêng, CI phát notice và không được diễn giải thành kết quả authenticated PASS.
+
+Fixture phải là tài khoản/test data riêng, không dùng tài khoản giáo viên hoặc dữ liệu học sinh production. Sau mỗi lần chạy cần kiểm tra cleanup/idempotency key và giữ lại trace khi test retry thất bại.
+
 ## Audit log privacy
 
 Audit chỉ lưu identifiers, action, counters và fingerprint cần cho idempotency. Không lưu token thô, URL media, nội dung note, hoặc email guardian trong `afterJson` mới. Các log cũ cần retention/cleanup theo [12-privacy-retention-media.md](./12-privacy-retention-media.md).

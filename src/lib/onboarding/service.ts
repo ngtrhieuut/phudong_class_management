@@ -46,7 +46,7 @@ const onboardingSchema = z.object({
   }),
   classroom: z.object({
     name: z.string().trim().min(1).max(80),
-    grade: z.number().int().min(1).max(12),
+    grade: z.number().int().min(1).max(5),
   }),
   students: z.array(studentSchema).max(200).default([]),
 });
@@ -105,6 +105,12 @@ function generatedOrganizationCode(userId: string) {
   return `PHU-${createHash("sha256").update(userId).digest("hex").slice(0, 10).toUpperCase()}`;
 }
 
+export function parseTeacherOnboardingInput(input: unknown): OnboardingInput {
+  const parsed = onboardingSchema.safeParse(input);
+  if (!parsed.success) throw new OnboardingError("INVALID_INPUT", parsed.error.issues[0]?.message ?? "Thông tin khởi tạo lớp chưa hợp lệ.");
+  return parsed.data;
+}
+
 async function seedClassConfiguration(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], classId: string, organizationId: string) {
   await tx.insert(classRoles).values([
     { classId, name: "Lớp trưởng", icon: "crown", sortOrder: 0 },
@@ -126,15 +132,13 @@ export async function getOnboardingState(userId: string) {
     .where(and(eq(organizationMembers.userId, userId), eq(users.status, "active")))
     .limit(1);
   const [classContext] = membership
-    ? await db.select({ id: classes.id, name: classes.name, grade: classes.grade, schoolYearName: schoolYears.name }).from(classMemberships).innerJoin(classes, eq(classes.id, classMemberships.classId)).innerJoin(schoolYears, eq(schoolYears.id, classes.schoolYearId)).where(and(eq(classMemberships.userId, userId), inArray(classMemberships.role, ["homeroom_teacher", "teacher"]))).limit(1)
+    ? await db.select({ id: classes.id, name: classes.name, grade: classes.grade, schoolYearName: schoolYears.name }).from(classMemberships).innerJoin(classes, eq(classes.id, classMemberships.classId)).innerJoin(schoolYears, eq(schoolYears.id, classes.schoolYearId)).where(and(eq(classMemberships.userId, userId), eq(classes.organizationId, membership.organizationId), eq(schoolYears.active, true), sql`coalesce(${classes.settingsJson}->>'archived', 'false') <> 'true'`, inArray(classMemberships.role, ["homeroom_teacher", "teacher"]))).limit(1)
     : [];
   return { completed: Boolean(classContext), organization: membership ?? null, classContext: classContext ?? null };
 }
 
 export async function completeTeacherOnboarding(input: unknown, actorUserId: string) {
-  const parsed = onboardingSchema.safeParse(input);
-  if (!parsed.success) throw new OnboardingError("INVALID_INPUT", parsed.error.issues[0]?.message ?? "Thông tin khởi tạo lớp chưa hợp lệ.");
-  const value = parsed.data;
+  const value = parseTeacherOnboardingInput(input);
   if (dateAtUtc(value.schoolYear.endsAt) <= dateAtUtc(value.schoolYear.startsAt)) throw new OnboardingError("INVALID_INPUT", "Ngày kết thúc năm học phải sau ngày bắt đầu.");
 
   return db.transaction(async (tx) => {
@@ -167,12 +171,13 @@ export async function completeTeacherOnboarding(input: unknown, actorUserId: str
     const [year] = await tx.select({ id: schoolYears.id }).from(schoolYears).where(and(eq(schoolYears.organizationId, organizationId), eq(schoolYears.name, value.schoolYear.name))).limit(1);
     const schoolYear = year ?? (await tx.insert(schoolYears).values({ organizationId, name: value.schoolYear.name, startsAt: dateAtUtc(value.schoolYear.startsAt), endsAt: dateAtUtc(value.schoolYear.endsAt), active: true }).returning({ id: schoolYears.id }))[0];
     if (!schoolYear) throw new OnboardingError("CONFLICT", "Không thể tạo năm học.");
-    await tx.update(schoolYears).set({ active: true, updatedAt: new Date() }).where(eq(schoolYears.id, schoolYear.id));
+    await tx.update(schoolYears).set({ active: false, updatedAt: new Date() }).where(eq(schoolYears.organizationId, organizationId));
+    await tx.update(schoolYears).set({ startsAt: dateAtUtc(value.schoolYear.startsAt), endsAt: dateAtUtc(value.schoolYear.endsAt), active: true, updatedAt: new Date() }).where(and(eq(schoolYears.id, schoolYear.id), eq(schoolYears.organizationId, organizationId)));
 
-    const [existingClass] = await tx.select({ id: classes.id }).from(classes).where(and(eq(classes.organizationId, organizationId), eq(classes.schoolYearId, schoolYear.id), eq(classes.name, value.classroom.name))).limit(1);
+    const [existingClass] = await tx.select({ id: classes.id, settingsJson: classes.settingsJson }).from(classes).where(and(eq(classes.organizationId, organizationId), eq(classes.schoolYearId, schoolYear.id), eq(classes.name, value.classroom.name))).limit(1);
     const classRow = existingClass ?? (await tx.insert(classes).values({ organizationId, schoolYearId: schoolYear.id, name: value.classroom.name, grade: value.classroom.grade, homeroomTeacherId: actorUserId }).returning({ id: classes.id }))[0];
     if (!classRow) throw new OnboardingError("CONFLICT", "Không thể tạo lớp học.");
-    await tx.update(classes).set({ homeroomTeacherId: actorUserId, updatedAt: new Date() }).where(eq(classes.id, classRow.id));
+    await tx.update(classes).set({ grade: value.classroom.grade, homeroomTeacherId: actorUserId, settingsJson: { ...(existingClass?.settingsJson ?? {}), archived: false }, updatedAt: new Date() }).where(and(eq(classes.id, classRow.id), eq(classes.organizationId, organizationId), eq(classes.schoolYearId, schoolYear.id)));
     await tx.insert(classMemberships).values({ classId: classRow.id, userId: actorUserId, role: "homeroom_teacher" }).onConflictDoUpdate({ target: [classMemberships.classId, classMemberships.userId], set: { role: "homeroom_teacher", updatedAt: new Date() } });
     await seedClassConfiguration(tx, classRow.id, organizationId);
 

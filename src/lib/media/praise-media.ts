@@ -269,7 +269,7 @@ export async function persistPraiseMedia(input: {
   if (input.blob.contentType.startsWith("image/") && validatedBlob.body) {
     const sanitized = await sanitizePraiseImageBuffer(validatedBlob.body);
     const sanitizedPath = `praise/sanitized/${createHash("sha256").update(input.blob.url).digest("hex")}.webp`;
-    let sanitizedBlob: Awaited<ReturnType<typeof put>>;
+    let sanitizedBlob: Awaited<ReturnType<typeof put>> | null = null;
     try {
       sanitizedBlob = await put(sanitizedPath, sanitized.buffer, {
         access: "private",
@@ -279,6 +279,7 @@ export async function persistPraiseMedia(input: {
       });
       if (sanitizedBlob.url !== input.blob.url) await del(input.blob.url);
     } catch {
+      if (sanitizedBlob && sanitizedBlob.url !== input.blob.url) await del(sanitizedBlob.url).catch(() => undefined);
       throw new PraiseMediaError("STORAGE_NOT_CONFIGURED", "Không thể lưu ảnh đã được làm sạch vào storage.");
     }
     storageKey = sanitizedBlob.url;

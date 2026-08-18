@@ -19,11 +19,13 @@ Chỉ trả về dữ liệu cần cho màn hình hiện tại. Parent chỉ đ�
 
 ## Upload requirements
 
-- Allowlist MIME, giới hạn 50 MB, giới hạn pathname và kiểm tra magic bytes server-side.
+- Allowlist MIME, giới hạn 10 MB cho ảnh và 50 MB cho video, giới hạn pathname và kiểm tra magic bytes server-side.
 - Không tin `Content-Type` do client khai báo; callback phải xác thực session/actor và kiểm tra lại quyền write trên praise post.
-- Ảnh được client resize WebP; server callback vẫn phải kiểm tra bytes trước khi persist. EXIF/GPS không được coi là an toàn chỉ vì file có MIME ảnh; pipeline re-encode ảnh server-side là bước bắt buộc trước khi mở rộng upload ngoài UI hiện tại.
+- Ảnh được kiểm tra magic bytes, đọc lại từ private Blob, giới hạn 24 triệu pixel, resize tối đa 2400px và re-encode WebP quality 82 ở server trước khi persist. Pipeline không giữ metadata nguồn nên EXIF/GPS bị loại khỏi asset đã lưu; kích thước và MIME WebP được ghi vào `media_assets`.
 - Video hiện chỉ kiểm tra container signature/size; chưa có server-side transcode/metadata stripping. Không tuyên bố video EXIF/GPS sanitization hoàn tất cho đến khi pipeline đó được triển khai.
 - Serve qua private media endpoint với `no-store`, không dùng URL public lâu hạn. Chỉ giữ `inline` cho loại media cần embed và kiểm soát MIME; loại không cần embed nên chuyển `attachment`.
+
+Khi xóa media, application xóa Blob trước rồi xóa row DB trong transaction. Nếu một bước lỗi, job cleanup/reconciliation phải được chạy lại từ audit/storage inventory; không coi client callback là bằng chứng duy nhất rằng object đã bị xóa.
 
 ## Avatar assets
 

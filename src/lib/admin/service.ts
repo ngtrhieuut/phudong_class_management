@@ -12,10 +12,13 @@ const base = { organizationId };
 const adminActionSchema = z.discriminatedUnion("action", [
   z.object({ ...base, action: z.literal("organization.update"), name: z.string().trim().min(1).max(160), code: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9_-]+$/u) }),
   z.object({ ...base, action: z.literal("school-year.save"), id: z.string().uuid().optional(), name: z.string().trim().min(1).max(80), startsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u), endsAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u), active: z.boolean().default(false) }),
-  z.object({ ...base, action: z.literal("class.save"), id: z.string().uuid().optional(), schoolYearId: z.string().uuid(), name: z.string().trim().min(1).max(80), grade: z.number().int().min(1).max(12), teacherId: z.string().uuid().nullable().optional(), archived: z.boolean().default(false) }),
+  z.object({ ...base, action: z.literal("school-year.archive"), id: z.string().uuid(), confirmation: z.literal("ARCHIVE") }),
+  z.object({ ...base, action: z.literal("class.save"), id: z.string().uuid().optional(), schoolYearId: z.string().uuid(), name: z.string().trim().min(1).max(80), grade: z.number().int().min(1).max(5), teacherId: z.string().uuid().nullable().optional(), archived: z.boolean().default(false) }),
   z.object({ ...base, action: z.literal("member.invite"), email: z.string().trim().email().max(320), displayName: z.string().trim().min(1).max(160).optional(), role: z.enum(["admin", "teacher", "staff"]) }),
   z.object({ ...base, action: z.literal("member.role"), userId: z.string().uuid(), role: z.enum(["admin", "teacher", "staff"]) }),
   z.object({ ...base, action: z.literal("member.revoke"), userId: z.string().uuid(), confirmation: z.literal("REVOKE") }),
+  z.object({ ...base, action: z.literal("member.class-access"), classId: z.string().uuid(), userId: z.string().uuid(), role: z.enum(["teacher", "assistant"]), enabled: z.boolean() }),
+  z.object({ ...base, action: z.literal("member.deactivate"), userId: z.string().uuid(), confirmation: z.literal("DEACTIVATE") }),
   z.object({ ...base, action: z.literal("behavior.save"), id: z.string().uuid().optional(), classId: z.string().uuid(), name: z.string().trim().min(1).max(120), category: z.enum(["positive", "needs_improvement"]), defaultPoints: z.number().int().min(-100).max(100), active: z.boolean().default(true) }),
   z.object({ ...base, action: z.literal("badge.save"), id: z.string().uuid().optional(), classId: z.string().uuid(), name: z.string().trim().min(1).max(120), description: z.string().trim().min(1).max(500), active: z.boolean().default(true) }),
   z.object({ ...base, action: z.literal("reward.save"), id: z.string().uuid().optional(), classId: z.string().uuid(), name: z.string().trim().min(1).max(120), description: z.string().trim().min(1).max(500), costStars: z.number().int().min(1).max(100000), stock: z.number().int().min(0).max(100000).nullable().optional(), active: z.boolean().default(true) }),
@@ -46,8 +49,8 @@ async function assertClassInOrganization(tx: Parameters<Parameters<typeof db.tra
   if (!row) throw new AdminServiceError("NOT_FOUND", "Không tìm thấy lớp trong tổ chức.");
 }
 
-async function audit(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], actorUserId: string, organizationIdValue: string, entityType: string, entityId: string, action: string, afterJson: Record<string, unknown>) {
-  await tx.insert(auditLogs).values({ organizationId: organizationIdValue, actorUserId, entityType, entityId, action, afterJson });
+async function audit(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], actorUserId: string, organizationIdValue: string, entityType: string, entityId: string, action: string, afterJson: Record<string, unknown>, beforeJson?: Record<string, unknown>) {
+  await tx.insert(auditLogs).values({ organizationId: organizationIdValue, actorUserId, entityType, entityId, action, beforeJson, afterJson });
 }
 
 export async function executeAdminAction(input: unknown, actorUserId: string) {
@@ -59,9 +62,10 @@ export async function executeAdminAction(input: unknown, actorUserId: string) {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:admin:${action.organizationId}`}, 0))`);
 
     if (action.action === "organization.update") {
+      const [before] = await tx.select({ name: organizations.name, code: organizations.code }).from(organizations).where(eq(organizations.id, action.organizationId)).limit(1);
       const [updated] = await tx.update(organizations).set({ name: action.name, code: action.code, updatedAt: new Date() }).where(eq(organizations.id, action.organizationId)).returning({ id: organizations.id });
       if (!updated) throw new AdminServiceError("NOT_FOUND", "Không tìm thấy tổ chức.");
-      await audit(tx, actorUserId, action.organizationId, "organization", updated.id, "updated", { fields: ["name", "code"] });
+      await audit(tx, actorUserId, action.organizationId, "organization", updated.id, "updated", { name: action.name, code: action.code }, before);
       return { id: updated.id };
     }
 
@@ -76,21 +80,33 @@ export async function executeAdminAction(input: unknown, actorUserId: string) {
       return { id: saved.id };
     }
 
+    if (action.action === "school-year.archive") {
+      const [year] = await tx.select({ id: schoolYears.id, name: schoolYears.name, active: schoolYears.active }).from(schoolYears).where(and(eq(schoolYears.id, action.id), eq(schoolYears.organizationId, action.organizationId))).limit(1);
+      if (!year) throw new AdminServiceError("NOT_FOUND", "Không tìm thấy năm học.");
+      if (!year.active) return { id: year.id, archived: true };
+      await tx.update(schoolYears).set({ active: false, updatedAt: new Date() }).where(eq(schoolYears.id, year.id));
+      await audit(tx, actorUserId, action.organizationId, "school_year", year.id, "archived", { name: year.name, active: false }, { name: year.name, active: true });
+      return { id: year.id, archived: true };
+    }
+
     if (action.action === "class.save") {
       const [year] = await tx.select({ id: schoolYears.id }).from(schoolYears).where(and(eq(schoolYears.id, action.schoolYearId), eq(schoolYears.organizationId, action.organizationId))).limit(1);
       if (!year) throw new AdminServiceError("NOT_FOUND", "Năm học không thuộc tổ chức.");
       if (action.teacherId) {
-        const [teacher] = await tx.select({ id: organizationMembers.userId }).from(organizationMembers).innerJoin(users, eq(users.id, organizationMembers.userId)).where(and(eq(organizationMembers.organizationId, action.organizationId), eq(organizationMembers.userId, action.teacherId), inArray(organizationMembers.role, ["admin", "teacher", "staff"]), eq(users.status, "active"))).limit(1);
+        const [teacher] = await tx.select({ id: organizationMembers.userId }).from(organizationMembers).innerJoin(users, eq(users.id, organizationMembers.userId)).where(and(eq(organizationMembers.organizationId, action.organizationId), eq(organizationMembers.userId, action.teacherId), inArray(organizationMembers.role, ["admin", "teacher"]), eq(users.status, "active"))).limit(1);
         if (!teacher) throw new AdminServiceError("INVALID_INPUT", "Giáo viên không thuộc tổ chức hoặc không active.");
       }
-      const [existing] = action.id ? await tx.select({ settingsJson: classes.settingsJson }).from(classes).where(and(eq(classes.id, action.id), eq(classes.organizationId, action.organizationId))).limit(1) : [];
+      const [existing] = action.id ? await tx.select({ settingsJson: classes.settingsJson, homeroomTeacherId: classes.homeroomTeacherId, schoolYearId: classes.schoolYearId, name: classes.name, grade: classes.grade }).from(classes).where(and(eq(classes.id, action.id), eq(classes.organizationId, action.organizationId))).limit(1) : [];
       const settingsJson = { ...(existing?.settingsJson ?? {}), archived: action.archived };
       const [saved] = action.id
         ? await tx.update(classes).set({ schoolYearId: action.schoolYearId, name: action.name, grade: action.grade, homeroomTeacherId: action.teacherId ?? null, settingsJson, updatedAt: new Date() }).where(and(eq(classes.id, action.id), eq(classes.organizationId, action.organizationId))).returning({ id: classes.id })
         : await tx.insert(classes).values({ organizationId: action.organizationId, schoolYearId: action.schoolYearId, name: action.name, grade: action.grade, homeroomTeacherId: action.teacherId ?? null, settingsJson }).returning({ id: classes.id });
       if (!saved) throw new AdminServiceError("NOT_FOUND", "Không tìm thấy lớp.");
+      if (existing?.homeroomTeacherId && existing.homeroomTeacherId !== (action.teacherId ?? null)) {
+        await tx.delete(classMemberships).where(and(eq(classMemberships.classId, saved.id), eq(classMemberships.userId, existing.homeroomTeacherId), eq(classMemberships.role, "homeroom_teacher")));
+      }
       if (action.teacherId) await tx.insert(classMemberships).values({ classId: saved.id, userId: action.teacherId, role: "homeroom_teacher" }).onConflictDoUpdate({ target: [classMemberships.classId, classMemberships.userId], set: { role: "homeroom_teacher", updatedAt: new Date() } });
-      await audit(tx, actorUserId, action.organizationId, "class", saved.id, action.archived ? "archived" : action.id ? "updated" : "created", { grade: action.grade, teacherAssigned: Boolean(action.teacherId) });
+      await audit(tx, actorUserId, action.organizationId, "class", saved.id, action.archived ? "archived" : action.id ? "updated" : "created", { schoolYearId: action.schoolYearId, name: action.name, grade: action.grade, teacherId: action.teacherId ?? null, archived: action.archived }, existing ? { schoolYearId: existing.schoolYearId, name: existing.name, grade: existing.grade, teacherId: existing.homeroomTeacherId, archived: existing.settingsJson?.archived === true } : undefined);
       return { id: saved.id };
     }
 
@@ -126,10 +142,47 @@ export async function executeAdminAction(input: unknown, actorUserId: string) {
         if (admins.length < 2) throw new AdminServiceError("CONFLICT", "Không thể thu hồi admin cuối cùng của tổ chức.");
       }
       const orgClasses = await tx.select({ id: classes.id }).from(classes).where(eq(classes.organizationId, action.organizationId));
-      if (orgClasses.length) await tx.delete(classMemberships).where(and(eq(classMemberships.userId, action.userId), inArray(classMemberships.classId, orgClasses.map((item) => item.id))));
+      const orgClassIds = orgClasses.map((item) => item.id);
+      const removedMemberships = orgClassIds.length
+        ? await tx.select({ id: classMemberships.id }).from(classMemberships).where(and(eq(classMemberships.userId, action.userId), inArray(classMemberships.classId, orgClassIds)))
+        : [];
+      if (orgClassIds.length) {
+        await tx.delete(classMemberships).where(and(eq(classMemberships.userId, action.userId), inArray(classMemberships.classId, orgClassIds)));
+        await tx.update(classes).set({ homeroomTeacherId: null, updatedAt: new Date() }).where(and(eq(classes.organizationId, action.organizationId), eq(classes.homeroomTeacherId, action.userId)));
+      }
       await tx.delete(organizationMembers).where(eq(organizationMembers.id, member.id));
-      await audit(tx, actorUserId, action.organizationId, "organization_member", action.userId, "revoked", { classMembershipsRemoved: orgClasses.length });
+      await audit(tx, actorUserId, action.organizationId, "organization_member", action.userId, "revoked", { classMembershipsRemoved: removedMemberships.length });
       return { id: action.userId };
+    }
+
+    if (action.action === "member.class-access") {
+      await assertClassInOrganization(tx, action.classId, action.organizationId);
+      const [member] = await tx.select({ id: organizationMembers.id, role: organizationMembers.role }).from(organizationMembers).innerJoin(users, eq(users.id, organizationMembers.userId)).where(and(eq(organizationMembers.organizationId, action.organizationId), eq(organizationMembers.userId, action.userId), eq(users.status, "active"))).limit(1);
+      if (!member) throw new AdminServiceError("NOT_FOUND", "Không tìm thấy thành viên active trong tổ chức.");
+      const [before] = await tx.select({ role: classMemberships.role }).from(classMemberships).where(and(eq(classMemberships.classId, action.classId), eq(classMemberships.userId, action.userId))).limit(1);
+      if (action.enabled) {
+        await tx.insert(classMemberships).values({ classId: action.classId, userId: action.userId, role: action.role }).onConflictDoUpdate({ target: [classMemberships.classId, classMemberships.userId], set: { role: action.role, updatedAt: new Date() } });
+      } else {
+        await tx.delete(classMemberships).where(and(eq(classMemberships.classId, action.classId), eq(classMemberships.userId, action.userId)));
+        if (before?.role === "homeroom_teacher") {
+          await tx.update(classes).set({ homeroomTeacherId: null, updatedAt: new Date() }).where(and(eq(classes.id, action.classId), eq(classes.homeroomTeacherId, action.userId)));
+        }
+      }
+      await audit(tx, actorUserId, action.organizationId, "class_membership", `${action.classId}:${action.userId}`, action.enabled ? "granted" : "revoked", { classId: action.classId, userId: action.userId, role: action.enabled ? action.role : null, enabled: action.enabled }, before ? { classId: action.classId, userId: action.userId, role: before.role, enabled: true } : { classId: action.classId, userId: action.userId, enabled: false });
+      return { classId: action.classId, userId: action.userId, enabled: action.enabled };
+    }
+
+    if (action.action === "member.deactivate") {
+      if (action.userId === actorUserId) throw new AdminServiceError("CONFLICT", "Không thể tự khóa tài khoản admin đang đăng nhập.");
+      const [member] = await tx.select({ id: organizationMembers.id, role: organizationMembers.role, status: users.status }).from(organizationMembers).innerJoin(users, eq(users.id, organizationMembers.userId)).where(and(eq(organizationMembers.organizationId, action.organizationId), eq(organizationMembers.userId, action.userId))).limit(1);
+      if (!member) throw new AdminServiceError("NOT_FOUND", "Không tìm thấy thành viên.");
+      if (member.role === "admin") {
+        const admins = await tx.select({ id: organizationMembers.id }).from(organizationMembers).innerJoin(users, eq(users.id, organizationMembers.userId)).where(and(eq(organizationMembers.organizationId, action.organizationId), eq(organizationMembers.role, "admin"), eq(users.status, "active")));
+        if (admins.length < 2) throw new AdminServiceError("CONFLICT", "Không thể khóa admin active cuối cùng của tổ chức.");
+      }
+      await tx.update(users).set({ status: "suspended", updatedAt: new Date() }).where(eq(users.id, action.userId));
+      await audit(tx, actorUserId, action.organizationId, "user", action.userId, "deactivated", { status: "suspended" }, { status: member.status });
+      return { id: action.userId, status: "suspended" };
     }
 
     await assertClassInOrganization(tx, action.classId, action.organizationId);

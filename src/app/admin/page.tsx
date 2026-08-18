@@ -11,11 +11,11 @@ export const dynamic = "force-dynamic";
 const entityOptions = ["score_transaction", "student_guardian", "praise_post", "reward_redemption", "student_import", "task", "report_export"];
 const actionOptions = ["created", "updated", "linked", "revoked", "scored", "redeemed", "imported", "exported"];
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ entityType?: string; action?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ entityType?: string; action?: string; organizationId?: string }> }) {
   const session = await requireUserSession();
   await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
   const params = await searchParams;
-  const overview = await getAdminOverview(session.user.id, { entityType: params.entityType, action: params.action });
+  const overview = await getAdminOverview(session.user.id, { entityType: params.entityType, action: params.action, organizationId: params.organizationId });
 
   if (!overview) return <main className="min-h-[100dvh] bg-[var(--surface)] p-5 md:p-8"><div className="mx-auto max-w-2xl rounded-[2rem] bg-[var(--surface-lowest)] p-10 text-center soft-shadow"><ShieldCheck size={42} className="mx-auto text-[var(--needs-improvement)]" /><h1 className="mt-4 font-heading text-3xl font-bold text-[var(--primary)]">Không có quyền quản trị</h1><p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">Tài khoản này chưa được cấp role admin trong tổ chức.</p></div></main>;
 
@@ -25,6 +25,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <p className="font-heading text-sm font-bold uppercase tracking-[0.14em] text-[var(--tertiary)]">Vận hành an toàn</p>
         <h1 className="mt-2 font-heading text-4xl font-bold text-[var(--primary)]">Admin foundation</h1>
         <p className="mt-3 max-w-2xl font-body text-sm leading-6 text-[var(--on-surface-variant)]">Tổng quan lớp, thành viên, học sinh, guardian và audit log trong phạm vi tổ chức được cấp quyền.</p>
+
+        <form method="get" className="mt-5 flex flex-col gap-3 rounded-2xl bg-[var(--surface-lowest)] p-4 soft-shadow sm:flex-row sm:items-end">
+          <label className="flex-1 font-body text-sm"><span className="font-heading text-xs font-bold">Tenant đang quản trị</span><select name="organizationId" defaultValue={overview.selectedOrganizationId} className="mt-1 min-h-11 w-full rounded-xl bg-[var(--surface-low)] px-3">{overview.organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name} · {organization.code}</option>)}</select></label>
+          {overview.filters.entityType ? <input type="hidden" name="entityType" value={overview.filters.entityType} /> : null}
+          {overview.filters.action ? <input type="hidden" name="action" value={overview.filters.action} /> : null}
+          <button type="submit" className="min-h-11 rounded-full bg-[var(--primary)] px-5 font-heading text-xs font-bold text-white">Chuyển tenant</button>
+        </form>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="rounded-2xl bg-[var(--surface-lowest)] p-5 soft-shadow"><UsersThree size={23} className="text-[var(--primary)]" /><p className="mt-4 font-body text-sm text-[var(--on-surface-variant)]">Lớp học</p><p className="mt-1 font-heading text-3xl font-bold text-[var(--primary)]">{overview.classes.length}</p></div>
@@ -36,11 +43,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
         <section className="mt-6 rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow">
           <h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Audit log</h2>
-          <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" method="get">
+            <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end" method="get">
+              <input type="hidden" name="organizationId" value={overview.selectedOrganizationId} />
             <label className="flex-1 font-body text-sm"><span className="font-heading text-xs font-bold text-[var(--on-surface)]">Entity</span><select name="entityType" defaultValue={overview.filters.entityType ?? ""} className="mt-1 min-h-11 w-full rounded-xl bg-[var(--surface-low)] px-3"><option value="">Tất cả</option>{entityOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
             <label className="flex-1 font-body text-sm"><span className="font-heading text-xs font-bold text-[var(--on-surface)]">Action</span><select name="action" defaultValue={overview.filters.action ?? ""} className="mt-1 min-h-11 w-full rounded-xl bg-[var(--surface-low)] px-3"><option value="">Tất cả</option>{actionOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>
             <button type="submit" className="min-h-11 rounded-full bg-[var(--primary)] px-5 font-heading text-xs font-bold text-white">Lọc audit</button>
-            <a href="/admin" className="inline-flex min-h-11 items-center justify-center rounded-full bg-[var(--surface-low)] px-5 font-heading text-xs font-bold text-[var(--primary)]">Xóa lọc</a>
+            <a href={`/admin?organizationId=${overview.selectedOrganizationId}`} className="inline-flex min-h-11 items-center justify-center rounded-full bg-[var(--surface-low)] px-5 font-heading text-xs font-bold text-[var(--primary)]">Xóa lọc</a>
           </form>
           <div className="mt-5 overflow-x-auto"><table className="min-w-full text-left"><caption className="sr-only">Audit log theo tổ chức</caption><thead><tr><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Thời gian</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Actor</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Entity</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Action</th></tr></thead><tbody>{overview.auditLogs.map((item) => <tr key={item.id} className="border-t border-[var(--surface-high)]"><td className="px-3 py-3 font-body text-sm whitespace-nowrap">{new Date(item.createdAt).toLocaleString("vi-VN")}</td><td className="px-3 py-3 font-body text-sm">{item.actorName}</td><td className="px-3 py-3 font-body text-sm">{item.entityType}<span className="block max-w-48 truncate font-body text-xs text-[var(--on-surface-variant)]">{item.entityId}</span></td><td className="px-3 py-3 font-body text-sm">{item.action}</td></tr>)}{overview.auditLogs.length === 0 ? <tr><td colSpan={4} className="px-3 py-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có audit log phù hợp.</td></tr> : null}</tbody></table></div>
         </section>
@@ -50,8 +58,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Thành viên tổ chức</h2><div className="mt-4 overflow-x-auto"><table className="min-w-full text-left"><caption className="sr-only">Giáo viên và thành viên tổ chức</caption><thead><tr><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Tên</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Email</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Vai trò</th></tr></thead><tbody>{overview.members.map((item) => <tr key={`${item.organizationId}-${item.userId}`} className="border-t border-[var(--surface-high)]"><td className="px-3 py-3 font-body text-sm">{item.displayName}</td><td className="px-3 py-3 font-body text-sm">{item.email || "—"}</td><td className="px-3 py-3 font-body text-sm">{item.role}</td></tr>)}{overview.members.length === 0 ? <tr><td colSpan={3} className="px-3 py-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có thành viên.</td></tr> : null}</tbody></table></div></div>
           <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Templates & cấu hình</h2><p className="mt-2 font-body text-sm text-[var(--on-surface-variant)]">Tổng số cấu hình đang có trong phạm vi tổ chức.</p><dl className="mt-5 grid grid-cols-2 gap-3">{[["Behavior", overview.configuration.behaviors], ["Level", overview.configuration.levels], ["Badge", overview.configuration.badges], ["Reward", overview.configuration.rewards]].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-low)] p-4"><dt className="font-body text-xs text-[var(--on-surface-variant)]">{label}</dt><dd className="mt-1 font-heading text-2xl font-bold text-[var(--primary)]">{value}</dd></div>)}</dl></div>
         </section>
-        <AdminInviteMemberForm organizationId={overview.organizations[0].id} />
-        <AdminManagementPanel organization={overview.organizations[0]} schoolYears={overview.schoolYears} classes={overview.classes} members={overview.members} />
+        <AdminInviteMemberForm organizationId={overview.selectedOrganizationId} />
+        <AdminManagementPanel organization={overview.organizations.find((organization) => organization.id === overview.selectedOrganizationId) ?? overview.organizations[0]} schoolYears={overview.schoolYears} classes={overview.classes} members={overview.members} classAccess={overview.classAccess} />
       </div>
     </main>
   );

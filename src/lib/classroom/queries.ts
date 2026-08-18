@@ -116,6 +116,7 @@ function accessibleClassCondition(userId: string, classId?: string) {
     eq(classMemberships.userId, userId),
     inArray(classMemberships.role, teacherRoles),
     eq(users.status, "active"),
+    eq(schoolYears.active, true),
     sql`coalesce(${classes.settingsJson}->>'archived', 'false') <> 'true'`,
     classId ? eq(classes.id, classId) : undefined,
   );
@@ -344,6 +345,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
         eq(classMemberships.userId, userId),
         inArray(classMemberships.role, teacherRoles),
         eq(users.status, "active"),
+        eq(schoolYears.active, true),
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
         eq(students.organizationId, classes.organizationId),
