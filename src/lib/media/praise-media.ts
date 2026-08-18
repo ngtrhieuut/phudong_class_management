@@ -1,6 +1,9 @@
-import { del, get } from "@vercel/blob";
+import { createHash } from "node:crypto";
+
+import { del, get, put } from "@vercel/blob";
 import { aliasedTable } from "drizzle-orm/alias";
 import { and, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
+import sharp from "sharp";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -20,7 +23,11 @@ import {
 
 export const PRAISE_MEDIA_OWNER_TYPE = "praise_post";
 export const PRAISE_MEDIA_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"] as const;
+export const PRAISE_MEDIA_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+export const PRAISE_MEDIA_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const PRAISE_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+export const PRAISE_MEDIA_MAX_IMAGE_DIMENSION = 2400;
+const PRAISE_MEDIA_MAX_IMAGE_PIXELS = 24_000_000;
 
 const teacherRoles = ["homeroom_teacher", "teacher"] as const;
 const mediaWriteRoles = ["homeroom_teacher", "teacher"] as const;
@@ -43,6 +50,10 @@ export class PraiseMediaError extends Error {
 
 function isAllowedContentType(value: string) {
   return (PRAISE_MEDIA_CONTENT_TYPES as readonly string[]).includes(value);
+}
+
+function maxBytesForContentType(contentType: string) {
+  return contentType.startsWith("image/") ? PRAISE_MEDIA_IMAGE_MAX_BYTES : PRAISE_MEDIA_VIDEO_MAX_BYTES;
 }
 
 export function parsePraiseMediaUploadPayload(value: string | null) {
@@ -73,8 +84,12 @@ export function validatePraiseMediaPathname(pathname: string) {
 }
 
 export function validatePraiseMediaContent(contentType: string, size: number) {
-  if (!isAllowedContentType(contentType) || !Number.isFinite(size) || size <= 0 || size > PRAISE_MEDIA_MAX_BYTES) {
-    throw new PraiseMediaError("INVALID_INPUT", "File phải là ảnh/video được hỗ trợ và không quá 50 MB.");
+  const maxBytes = maxBytesForContentType(contentType);
+  if (!isAllowedContentType(contentType) || !Number.isFinite(size) || size <= 0 || size > maxBytes) {
+    throw new PraiseMediaError(
+      "INVALID_INPUT",
+      contentType.startsWith("image/") ? "Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB." : "Video phải thuộc loại được hỗ trợ và không quá 50 MB.",
+    );
   }
 }
 
@@ -123,6 +138,64 @@ async function readBlobHeader(stream: ReadableStream<Uint8Array>, maxBytes = 64)
   return header;
 }
 
+async function readBlobBody(stream: ReadableStream<Uint8Array>, maxBytes: number) {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        throw new PraiseMediaError("INVALID_INPUT", "File upload vượt quá giới hạn dung lượng.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+}
+
+export async function sanitizePraiseImageBuffer(input: Buffer) {
+  try {
+    const image = sharp(input, { failOn: "error", limitInputPixels: PRAISE_MEDIA_MAX_IMAGE_PIXELS });
+    const metadata = await image.metadata();
+    if (!metadata.width || !metadata.height || metadata.width * metadata.height > PRAISE_MEDIA_MAX_IMAGE_PIXELS) {
+      throw new PraiseMediaError("INVALID_INPUT", "Ảnh có kích thước hoặc số pixel vượt quá giới hạn.");
+    }
+
+    // `rotate()` applies the EXIF orientation and WebP encoding omits source
+    // metadata by default, removing EXIF/GPS data from the persisted asset.
+    const output = await image
+      .rotate()
+      .resize({
+        width: PRAISE_MEDIA_MAX_IMAGE_DIMENSION,
+        height: PRAISE_MEDIA_MAX_IMAGE_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 82 })
+      .toBuffer();
+    if (output.byteLength > PRAISE_MEDIA_IMAGE_MAX_BYTES) {
+      throw new PraiseMediaError("INVALID_INPUT", "Ảnh sau khi xử lý vẫn vượt quá 10 MB.");
+    }
+    const outputMetadata = await sharp(output, { failOn: "error" }).metadata();
+    return {
+      buffer: output,
+      width: outputMetadata.width ?? 0,
+      height: outputMetadata.height ?? 0,
+      contentType: "image/webp" as const,
+    };
+  } catch (error) {
+    if (error instanceof PraiseMediaError) throw error;
+    throw new PraiseMediaError("INVALID_INPUT", "Không thể xử lý ảnh upload an toàn.");
+  }
+}
+
 export async function validatePraiseMediaBlob(blob: { url: string; contentType: string }) {
   validatePraiseMediaContent(blob.contentType, 1);
 
@@ -139,6 +212,11 @@ export async function validatePraiseMediaBlob(blob: { url: string; contentType: 
   validatePraiseMediaContent(blob.contentType, stored.blob.size);
   if (stored.blob.contentType && stored.blob.contentType !== blob.contentType) {
     throw new PraiseMediaError("INVALID_INPUT", "Loại file upload không hợp lệ.");
+  }
+  if (blob.contentType.startsWith("image/")) {
+    const body = await readBlobBody(stored.stream, PRAISE_MEDIA_IMAGE_MAX_BYTES);
+    validatePraiseMediaMagicBytes(blob.contentType, body.subarray(0, 64));
+    return { size: stored.blob.size, contentType: blob.contentType, body };
   }
   const header = await readBlobHeader(stored.stream);
   validatePraiseMediaMagicBytes(blob.contentType, header);
@@ -184,13 +262,40 @@ export async function persistPraiseMedia(input: {
     .limit(1);
   if (!post) throw new PraiseMediaError("NOT_FOUND", "Không tìm thấy bài tuyên dương.");
 
+  let storageKey = input.blob.url;
+  let mimeType = validatedBlob.contentType;
+  let width: number | null = null;
+  let height: number | null = null;
+  if (input.blob.contentType.startsWith("image/") && validatedBlob.body) {
+    const sanitized = await sanitizePraiseImageBuffer(validatedBlob.body);
+    const sanitizedPath = `praise/sanitized/${createHash("sha256").update(input.blob.url).digest("hex")}.webp`;
+    let sanitizedBlob: Awaited<ReturnType<typeof put>>;
+    try {
+      sanitizedBlob = await put(sanitizedPath, sanitized.buffer, {
+        access: "private",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: sanitized.contentType,
+      });
+      if (sanitizedBlob.url !== input.blob.url) await del(input.blob.url);
+    } catch {
+      throw new PraiseMediaError("STORAGE_NOT_CONFIGURED", "Không thể lưu ảnh đã được làm sạch vào storage.");
+    }
+    storageKey = sanitizedBlob.url;
+    mimeType = sanitized.contentType;
+    width = sanitized.width;
+    height = sanitized.height;
+  }
+
   const [asset] = await db
     .insert(mediaAssets)
     .values({
       ownerType: PRAISE_MEDIA_OWNER_TYPE,
       ownerId: payload.postId,
-      storageKey: input.blob.url,
-      mimeType: validatedBlob.contentType,
+      storageKey,
+      mimeType,
+      width,
+      height,
     })
     .onConflictDoNothing({ target: mediaAssets.storageKey })
     .returning({ id: mediaAssets.id, mimeType: mediaAssets.mimeType });

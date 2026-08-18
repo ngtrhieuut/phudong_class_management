@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  PRAISE_MEDIA_IMAGE_MAX_BYTES,
   PRAISE_MEDIA_MAX_BYTES,
+  PRAISE_MEDIA_VIDEO_MAX_BYTES,
   parsePraiseMediaUploadPayload,
+  sanitizePraiseImageBuffer,
   validatePraiseMediaContent,
   validatePraiseMediaMagicBytes,
   validatePraiseMediaPathname,
@@ -33,15 +36,38 @@ describe('praise media validation', () => {
     expect(() => validatePraiseMediaPathname('praise/\u0000photo.webp')).toThrow('Tên file không hợp lệ.');
   });
 
-  it('enforces the allowlist and 50 MB size limit', () => {
+  it('enforces the allowlist and per-type size limits', () => {
     expect(validatePraiseMediaContent('image/webp', 1024)).toBeUndefined();
-    expect(validatePraiseMediaContent('video/mp4', PRAISE_MEDIA_MAX_BYTES)).toBeUndefined();
+    expect(validatePraiseMediaContent('video/mp4', PRAISE_MEDIA_VIDEO_MAX_BYTES)).toBeUndefined();
     expect(() => validatePraiseMediaContent('image/svg+xml', 1024)).toThrow(
-      'File phải là ảnh/video được hỗ trợ và không quá 50 MB.',
+      'Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB.',
     );
-    expect(() => validatePraiseMediaContent('image/jpeg', PRAISE_MEDIA_MAX_BYTES + 1)).toThrow(
-      'File phải là ảnh/video được hỗ trợ và không quá 50 MB.',
+    expect(() => validatePraiseMediaContent('image/jpeg', PRAISE_MEDIA_IMAGE_MAX_BYTES + 1)).toThrow(
+      'Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB.',
     );
+    expect(() => validatePraiseMediaContent('video/mp4', PRAISE_MEDIA_MAX_BYTES + 1)).toThrow(
+      'Video phải thuộc loại được hỗ trợ và không quá 50 MB.',
+    );
+  });
+
+  it('re-encodes images, caps dimensions, and strips source metadata', async () => {
+    const sharp = (await import('sharp')).default;
+    const input = await sharp({
+      create: { width: 3200, height: 1800, channels: 3, background: { r: 20, g: 120, b: 220 } },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const sanitized = await sanitizePraiseImageBuffer(input);
+    const metadata = await sharp(sanitized.buffer).metadata();
+
+    expect(sanitized.contentType).toBe('image/webp');
+    expect(sanitized.width).toBe(2400);
+    expect(sanitized.height).toBe(1350);
+    expect(metadata.format).toBe('webp');
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.xmp).toBeUndefined();
+    expect(sanitized.buffer.byteLength).toBeLessThanOrEqual(PRAISE_MEDIA_IMAGE_MAX_BYTES);
   });
 
   it('requires the uploaded bytes to match the declared media type', () => {

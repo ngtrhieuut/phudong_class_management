@@ -277,6 +277,27 @@ export async function getClassStudents(
   }));
 }
 
+export async function getClassStudentAvatars(userId: string, classId: string) {
+  const classContext = await getTeacherClass(userId, classId);
+  if (!classContext) {
+    throw new Error("FORBIDDEN_CLASS_ACCESS");
+  }
+
+  return db
+    .select({ id: students.id, avatarUrl: students.avatarUrl })
+    .from(classStudents)
+    .innerJoin(students, eq(students.id, classStudents.studentId))
+    .where(
+      and(
+        eq(classStudents.classId, classId),
+        isNull(classStudents.leftAt),
+        eq(students.status, "active"),
+        eq(students.organizationId, classContext.organizationId),
+      ),
+    )
+    .orderBy(asc(students.fullName));
+}
+
 export async function getTeacherStudentProfile(userId: string, studentId: string) {
   const [profile] = await db
     .select({

@@ -2,10 +2,32 @@ import { NextResponse } from "next/server";
 
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { authConfigured, getUserSession } from "@/lib/auth/server";
+import { getClassStudentAvatars } from "@/lib/classroom/queries";
 import { createStudent, StudentServiceError } from "@/lib/classroom/student-service";
 import { isSameOrigin, noStoreHeaders } from "@/lib/http/request-security";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  if (!authConfigured) return NextResponse.json({ error: "Authentication is not configured." }, { status: 503, headers: noStoreHeaders() });
+  const session = await getUserSession();
+  if (!session?.user) return NextResponse.json({ error: "Bạn cần đăng nhập để xem danh sách học sinh." }, { status: 401, headers: noStoreHeaders() });
+
+  const classId = new URL(request.url).searchParams.get("classId");
+  if (!classId) return NextResponse.json({ error: "Thiếu lớp học." }, { status: 400, headers: noStoreHeaders() });
+
+  try {
+    await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+    const data = await getClassStudentAvatars(session.user.id, classId);
+    return NextResponse.json({ data }, { headers: noStoreHeaders() });
+  } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN_CLASS_ACCESS") {
+      return NextResponse.json({ error: "Bạn không có quyền xem lớp này." }, { status: 403, headers: noStoreHeaders() });
+    }
+    console.error("[teacher/students] avatar snapshot failed", error instanceof Error ? { name: error.name, message: error.message } : error);
+    return NextResponse.json({ error: "Không thể tải avatar học sinh lúc này." }, { status: 500, headers: noStoreHeaders() });
+  }
+}
 
 export async function POST(request: Request) {
   if (!authConfigured) return NextResponse.json({ error: "Authentication is not configured." }, { status: 503 });

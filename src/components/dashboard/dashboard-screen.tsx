@@ -19,6 +19,7 @@ import { StudentCard } from "@/components/dashboard/student-card";
 import { AvatarImage } from "@/components/ui/avatar-template-picker";
 import type { DemoActivity, DemoBehavior, DemoPraise, DemoStudent } from "@/lib/demo-data";
 import { applyStudentAvatarUpdates } from "@/lib/client/student-avatar-store";
+import { fetchStudentAvatarSnapshots } from "@/lib/client/student-avatar-sync";
 
 const activityIcons = {
   star: Star,
@@ -79,6 +80,31 @@ export function DashboardScreen({
       setStudents(applyStudentAvatarUpdates(initialStudents));
     });
   }, [initialStudents]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function syncFromDatabase() {
+      const snapshots = await fetchStudentAvatarSnapshots(classId, controller.signal).catch(() => null);
+      if (!snapshots || controller.signal.aborted) return;
+      const avatarsByStudent = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot.avatarUrl]));
+      setStudents((current) => applyStudentAvatarUpdates(current.map((student) => (
+        avatarsByStudent.has(student.id) ? { ...student, avatarUrl: avatarsByStudent.get(student.id) ?? null } : student
+      ))));
+    }
+
+    void syncFromDatabase();
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") void syncFromDatabase();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pageshow", syncFromDatabase);
+    return () => {
+      controller.abort();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pageshow", syncFromDatabase);
+    };
+  }, [classId]);
 
   useEffect(() => {
     function handleAvatarChanged(event: Event) {
