@@ -2,6 +2,8 @@ import { neon, neonConfig, Pool, type NeonQueryFunction } from '@neondatabase/se
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import WebSocket from 'ws';
 
+import { resolveRuntimeDatabaseUrl } from '@/lib/db/runtime-config';
+
 import * as schema from './schema';
 
 type AppSql = NeonQueryFunction<false, false>;
@@ -13,7 +15,7 @@ let pool: Pool | undefined;
 let database: AppDatabase | undefined;
 
 function getRuntimeDatabaseUrl() {
-  return process.env.DATABASE_URL_RUNTIME ?? process.env.DATABASE_URL;
+  return resolveRuntimeDatabaseUrl();
 }
 
 function getSqlClient(): AppSql {

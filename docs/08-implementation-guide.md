@@ -202,6 +202,8 @@ Dùng `.env.example` làm template. Không commit secret thật.
 Các biến dự kiến:
 - `DATABASE_URL` — pooled/server runtime URL.
 - `DATABASE_URL_UNPOOLED` — direct URL nếu migration/tooling cần.
+- `DATABASE_URL_RUNTIME` — connection của runtime role least-privilege; ưu tiên khi đã provision.
+- `REQUIRE_RUNTIME_ROLE=true` — fail closed nếu runtime role chưa được cấu hình; chỉ bật sau khi `DATABASE_URL_RUNTIME` đã được verify.
 - `NEXT_PUBLIC_APP_URL`.
 - Neon Auth variables nếu Neon Auth được provision.
 
