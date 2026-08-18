@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import { Cards, ListBullets, MagnifyingGlass, Rows, SlidersHorizontal, UsersThree } from "@phosphor-icons/react";
 
 import { StudentAvatarPicker } from "@/components/ui/avatar-template-picker";
 import { StudentCard } from "@/components/dashboard/student-card";
 import type { DemoStudent } from "@/lib/demo-data";
+import { applyStudentAvatarUpdates } from "@/lib/client/student-avatar-store";
 
 type ViewMode = "cards" | "list" | "detail";
 
@@ -44,6 +45,7 @@ export function StudentsScreen({
   scoreClassId?: string;
 }) {
   const router = useRouter();
+  const [students, setStudents] = useState<DemoStudent[]>(initialStudents);
   const [query, setQuery] = useState(initialQuery);
   const [group, setGroup] = useState("Tất cả tổ");
   const [classRole, setClassRole] = useState("Tất cả chức vụ");
@@ -51,13 +53,30 @@ export function StudentsScreen({
   const [level, setLevel] = useState("Tất cả level");
   const [taskStatus, setTaskStatus] = useState("Tất cả trạng thái");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
-  const groups = ["Tất cả tổ", ...new Set(initialStudents.map((student) => student.group))];
-  const classRoles = ["Tất cả chức vụ", ...new Set(initialStudents.map((student) => student.classRole).filter((value): value is string => Boolean(value)))];
-  const levels = ["Tất cả level", ...new Set(initialStudents.map((student) => student.level))];
+  useEffect(() => {
+    startTransition(() => setStudents(applyStudentAvatarUpdates(initialStudents)));
+  }, [initialStudents]);
+
+  useEffect(() => {
+    function handleAvatarChanged(event: Event) {
+      const detail = (event as CustomEvent<{ studentId?: string; url?: string }>).detail;
+      if (!detail?.studentId || typeof detail.url !== "string") return;
+      setStudents((current) => current.map((student) => (
+        student.id === detail.studentId ? { ...student, avatarUrl: detail.url } : student
+      )));
+    }
+
+    window.addEventListener("phudong:student-avatar-changed", handleAvatarChanged);
+    return () => window.removeEventListener("phudong:student-avatar-changed", handleAvatarChanged);
+  }, []);
+
+  const groups = ["Tất cả tổ", ...new Set(students.map((student) => student.group))];
+  const classRoles = ["Tất cả chức vụ", ...new Set(students.map((student) => student.classRole).filter((value): value is string => Boolean(value)))];
+  const levels = ["Tất cả level", ...new Set(students.map((student) => student.level))];
   const taskStatuses = ["Tất cả trạng thái", "Đã xong", "Đang làm", "Chưa bắt đầu"];
   const filteredStudents = useMemo(
     () =>
-      initialStudents.filter((student) => {
+      students.filter((student) => {
         const normalizedQuery = query.trim().toLocaleLowerCase("vi-VN");
         const parentText = student.guardians?.map((guardian) => [guardian.fullName, guardian.phone, guardian.email].filter(Boolean).join(" ")).join(" ") ?? "";
         const searchableText = [student.name, student.studentCode, student.group, student.classRole, parentText].filter(Boolean).join(" ").toLocaleLowerCase("vi-VN");
@@ -69,7 +88,7 @@ export function StudentsScreen({
         const matchesTaskStatus = taskStatus === "Tất cả trạng thái" || student.taskStatus === taskStatus;
         return matchesQuery && matchesGroup && matchesClassRole && matchesGender && matchesLevel && matchesTaskStatus;
       }),
-    [classRole, gender, group, initialStudents, level, query, taskStatus],
+    [classRole, gender, group, level, query, students, taskStatus],
   );
 
   function openScore(studentId: string) {
@@ -93,7 +112,7 @@ export function StudentsScreen({
           <p className="mt-3 font-body text-base text-[var(--on-surface-variant)]">Theo dõi tiến bộ, hồ sơ gia đình và ghi nhận nhanh cho từng bạn.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 rounded-full bg-[var(--surface-low)] px-4 py-3 font-heading text-sm font-bold text-[var(--primary)]"><UsersThree size={20} weight="fill" /> {filteredStudents.length}/{initialStudents.length} học sinh</div>
+          <div className="flex items-center gap-2 rounded-full bg-[var(--surface-low)] px-4 py-3 font-heading text-sm font-bold text-[var(--primary)]"><UsersThree size={20} weight="fill" /> {filteredStudents.length}/{students.length} học sinh</div>
           <Link href={importHref} className="inline-flex min-h-11 items-center rounded-full bg-[var(--primary)] px-4 font-heading text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-[var(--primary-container)] hover:shadow-lg hover:shadow-blue-900/15 active:scale-[0.98]">Nhập danh sách</Link>
           {exportHref ? <a href={exportHref} className="inline-flex min-h-11 items-center rounded-full bg-[var(--surface-low)] px-4 font-heading text-sm font-bold text-[var(--primary)] transition hover:-translate-y-0.5 hover:bg-[var(--surface-container)] active:scale-[0.98]">Xuất CSV</a> : null}
         </div>

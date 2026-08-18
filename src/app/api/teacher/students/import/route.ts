@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { authConfigured, getUserSession } from "@/lib/auth/server";
 import { getTeacherClass } from "@/lib/classroom/queries";
+import { isSameOrigin } from "@/lib/http/request-security";
 import {
   StudentImportInputError,
   buildStudentImportPlan,
@@ -29,21 +30,6 @@ export const dynamic = "force-dynamic";
 
 const MAX_IMPORT_BODY_BYTES = 5 * 1024 * 1024;
 
-function assertSameOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try {
-    const originUrl = new URL(origin);
-    const requestUrl = new URL(request.url);
-    const configuredUrl = process.env.NEXT_PUBLIC_APP_URL
-      ? new URL(process.env.NEXT_PUBLIC_APP_URL)
-      : null;
-    return originUrl.origin === requestUrl.origin || originUrl.origin === configuredUrl?.origin;
-  } catch {
-    return false;
-  }
-}
-
 function jsonResponse(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
@@ -60,7 +46,7 @@ export async function POST(request: Request) {
   if (!session?.user) {
     return jsonResponse({ error: "Bạn cần đăng nhập để nhập danh sách." }, 401);
   }
-  if (!assertSameOrigin(request)) return jsonResponse({ error: "Yêu cầu không hợp lệ." }, 403);
+  if (!isSameOrigin(request)) return jsonResponse({ error: "Yêu cầu không hợp lệ." }, 403);
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_IMPORT_BODY_BYTES) return jsonResponse({ error: "File import vượt quá 5 MB." }, 413);
 

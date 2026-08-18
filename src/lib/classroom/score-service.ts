@@ -63,10 +63,11 @@ function uniqueStudentIds(studentIds: readonly string[]): string[] {
   return [...new Set(studentIds)];
 }
 
-function requestFingerprint(input: ScoreBatchInput): string {
+function requestFingerprint(input: ScoreBatchInput, actorUserId: string): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
+        actorUserId,
         classId: input.classId,
         studentIds: [...input.studentIds].sort(),
         behaviorTemplateId: input.behaviorTemplateId,
@@ -126,7 +127,7 @@ export async function recordBehaviorScoreBatch(
         sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:score:${parsed.data.classId}`}, 0))`,
       );
 
-      const fingerprint = requestFingerprint(parsed.data);
+      const fingerprint = requestFingerprint(parsed.data, actorUserId);
       const [previousAudit] = await tx
         .select({ afterJson: auditLogs.afterJson })
         .from(auditLogs)

@@ -3,6 +3,8 @@ import { ClipboardText, ShieldCheck, UserCircle, UsersThree } from "@phosphor-ic
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { requireUserSession } from "@/lib/auth/server";
 import { getAdminOverview } from "@/lib/admin/queries";
+import { AdminInviteMemberForm } from "@/components/admin/admin-invite-member-form";
+import { AdminManagementPanel } from "@/components/admin/admin-management-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Thành viên tổ chức</h2><div className="mt-4 overflow-x-auto"><table className="min-w-full text-left"><caption className="sr-only">Giáo viên và thành viên tổ chức</caption><thead><tr><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Tên</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Email</th><th scope="col" className="px-3 py-2 font-heading text-xs text-[var(--on-surface-variant)]">Vai trò</th></tr></thead><tbody>{overview.members.map((item) => <tr key={`${item.organizationId}-${item.userId}`} className="border-t border-[var(--surface-high)]"><td className="px-3 py-3 font-body text-sm">{item.displayName}</td><td className="px-3 py-3 font-body text-sm">{item.email || "—"}</td><td className="px-3 py-3 font-body text-sm">{item.role}</td></tr>)}{overview.members.length === 0 ? <tr><td colSpan={3} className="px-3 py-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có thành viên.</td></tr> : null}</tbody></table></div></div>
           <div className="rounded-[1.5rem] bg-[var(--surface-lowest)] p-6 soft-shadow"><h2 className="font-heading text-xl font-bold text-[var(--on-surface)]">Templates & cấu hình</h2><p className="mt-2 font-body text-sm text-[var(--on-surface-variant)]">Tổng số cấu hình đang có trong phạm vi tổ chức.</p><dl className="mt-5 grid grid-cols-2 gap-3">{[["Behavior", overview.configuration.behaviors], ["Level", overview.configuration.levels], ["Badge", overview.configuration.badges], ["Reward", overview.configuration.rewards]].map(([label, value]) => <div key={String(label)} className="rounded-2xl bg-[var(--surface-low)] p-4"><dt className="font-body text-xs text-[var(--on-surface-variant)]">{label}</dt><dd className="mt-1 font-heading text-2xl font-bold text-[var(--primary)]">{value}</dd></div>)}</dl></div>
         </section>
+        <AdminInviteMemberForm organizationId={overview.organizations[0].id} />
+        <AdminManagementPanel organization={overview.organizations[0]} schoolYears={overview.schoolYears} classes={overview.classes} members={overview.members} />
       </div>
     </main>
   );

@@ -1,4 +1,4 @@
-import { del } from "@vercel/blob";
+import { del, get } from "@vercel/blob";
 import { aliasedTable } from "drizzle-orm/alias";
 import { and, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -78,6 +78,73 @@ export function validatePraiseMediaContent(contentType: string, size: number) {
   }
 }
 
+function hasBytesAt(bytes: Uint8Array, offset: number, expected: number[]) {
+  return expected.every((value, index) => bytes[offset + index] === value);
+}
+
+export function validatePraiseMediaMagicBytes(contentType: string, bytes: Uint8Array) {
+  const matches =
+    (contentType === "image/jpeg" && hasBytesAt(bytes, 0, [0xff, 0xd8, 0xff])) ||
+    (contentType === "image/png" && hasBytesAt(bytes, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
+    (contentType === "image/webp" && hasBytesAt(bytes, 0, [0x52, 0x49, 0x46, 0x46]) && hasBytesAt(bytes, 8, [0x57, 0x45, 0x42, 0x50])) ||
+    (contentType === "video/mp4" && hasBytesAt(bytes, 4, [0x66, 0x74, 0x79, 0x70])) ||
+    (contentType === "video/webm" && hasBytesAt(bytes, 0, [0x1a, 0x45, 0xdf, 0xa3]));
+
+  if (!matches) {
+    throw new PraiseMediaError("INVALID_INPUT", "Nội dung file không khớp với loại file đã khai báo.");
+  }
+}
+
+async function readBlobHeader(stream: ReadableStream<Uint8Array>, maxBytes = 64) {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      const remaining = maxBytes - total;
+      const chunk = value.byteLength > remaining ? value.slice(0, remaining) : value;
+      chunks.push(chunk);
+      total += chunk.byteLength;
+      if (chunk.byteLength < value.byteLength) break;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+
+  const header = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    header.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return header;
+}
+
+export async function validatePraiseMediaBlob(blob: { url: string; contentType: string }) {
+  validatePraiseMediaContent(blob.contentType, 1);
+
+  let stored: Awaited<ReturnType<typeof get>>;
+  try {
+    stored = await get(blob.url, { access: "private", useCache: false });
+  } catch {
+    throw new PraiseMediaError("STORAGE_NOT_CONFIGURED", "Không thể kiểm tra file trong storage.");
+  }
+  if (!stored || stored.statusCode !== 200 || stored.blob.size === null) {
+    throw new PraiseMediaError("INVALID_INPUT", "Không thể xác minh file upload.");
+  }
+
+  validatePraiseMediaContent(blob.contentType, stored.blob.size);
+  if (stored.blob.contentType && stored.blob.contentType !== blob.contentType) {
+    throw new PraiseMediaError("INVALID_INPUT", "Loại file upload không hợp lệ.");
+  }
+  const header = await readBlobHeader(stored.stream);
+  validatePraiseMediaMagicBytes(blob.contentType, header);
+  return { size: stored.blob.size, contentType: blob.contentType };
+}
+
 export async function getWritablePraisePostAccess(userId: string, postId: string, classId: string) {
   const [access] = await db
     .select({ organizationId: classes.organizationId, classId: classes.id, postId: praisePosts.id })
@@ -103,9 +170,11 @@ export async function persistPraiseMedia(input: {
   tokenPayload: string | null | undefined;
 }) {
   const payload = parsePraiseMediaUploadPayload(input.tokenPayload ?? null);
-  if (!isAllowedContentType(input.blob.contentType)) {
-    throw new PraiseMediaError("INVALID_INPUT", "Loại file upload không được hỗ trợ.");
+  const access = await getWritablePraisePostAccess(payload.actorUserId, payload.postId, payload.classId);
+  if (!access || access.organizationId !== payload.organizationId) {
+    throw new PraiseMediaError("FORBIDDEN", "Bạn không có quyền upload cho bài này.");
   }
+  const validatedBlob = await validatePraiseMediaBlob(input.blob);
 
   const [post] = await db
     .select({ id: praisePosts.id, classId: praisePosts.classId, organizationId: classes.organizationId })
@@ -121,7 +190,7 @@ export async function persistPraiseMedia(input: {
       ownerType: PRAISE_MEDIA_OWNER_TYPE,
       ownerId: payload.postId,
       storageKey: input.blob.url,
-      mimeType: input.blob.contentType,
+      mimeType: validatedBlob.contentType,
     })
     .onConflictDoNothing({ target: mediaAssets.storageKey })
     .returning({ id: mediaAssets.id, mimeType: mediaAssets.mimeType });

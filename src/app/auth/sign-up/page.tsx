@@ -5,7 +5,7 @@ import { authConfigured } from "@/lib/auth/server";
 import { SignUpForm } from "./sign-up-form";
 
 function safeCallbackPath(value: string | undefined) {
-  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/teacher/dashboard";
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/teacher/onboarding";
 }
 
 export default async function SignUpPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {

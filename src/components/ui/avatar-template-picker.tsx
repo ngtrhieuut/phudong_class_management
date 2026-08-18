@@ -22,7 +22,7 @@ export function AvatarImage({
   className?: string;
 }) {
   if (!src) return null;
-  return <Image src={src} alt={alt} width={size} height={size} sizes={`${size}px`} className={`object-cover ${className}`} />;
+  return <Image src={src} alt={alt} width={size} height={size} sizes={`${size}px`} loading="lazy" className={`object-cover ${className}`} />;
 }
 
 export function AvatarTemplatePicker({

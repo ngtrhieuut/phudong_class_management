@@ -60,4 +60,16 @@ test("public shell exposes safe PWA assets and security headers", async ({ reque
   expect(response.headers()["x-content-type-options"]).toBe("nosniff");
   expect(response.headers()["x-frame-options"]).toBe("DENY");
   expect(response.headers()["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(response.headers()["content-security-policy"]).toContain("default-src 'self'");
+  expect(response.headers()["content-security-policy"]).toContain("strict-dynamic");
+  expect(response.headers()["strict-transport-security"]).toContain("max-age=63072000");
+});
+
+test("mutating API requests reject cross-origin callers before authentication", async ({ request }) => {
+  const response = await request.post("/api/teacher/score", {
+    headers: { origin: "https://evil.example" },
+    data: {},
+  });
+  expect(response.status()).toBe(403);
+  expect(response.headers()["cache-control"]).toContain("no-store");
 });

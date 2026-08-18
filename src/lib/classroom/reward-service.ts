@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -34,12 +36,21 @@ export class RewardServiceError extends Error {
   }
 }
 
-export async function redeemReward(input: unknown, actorUserId: string) {
+export async function redeemReward(input: unknown, actorUserId: string, idempotencyKey: string) {
   const parsed = redemptionSchema.safeParse(input);
   if (!parsed.success) throw new RewardServiceError("INVALID_INPUT", "Dữ liệu đổi quà không hợp lệ.");
+  if (!idempotencyKey.trim() || idempotencyKey.length > 128) throw new RewardServiceError("INVALID_INPUT", "Thiếu mã idempotency cho thao tác đổi quà.");
+  const fingerprint = createHash("sha256").update(JSON.stringify({ actorUserId, ...parsed.data })).digest("hex");
   return db.transaction(async (tx) => {
     const [access] = await tx.select({ organizationId: classes.organizationId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).innerJoin(classes, eq(classes.id, classMemberships.classId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, parsed.data.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"))).limit(1);
     if (!access) throw new RewardServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền đổi quà cho lớp này.");
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:reward-idempotency:${access.organizationId}:${idempotencyKey}`}, 0))`);
+    const [previousAudit] = await tx.select({ afterJson: auditLogs.afterJson }).from(auditLogs).where(and(eq(auditLogs.organizationId, access.organizationId), eq(auditLogs.entityType, "reward_redemption_idempotency"), eq(auditLogs.entityId, idempotencyKey), eq(auditLogs.action, "created"))).limit(1);
+    if (previousAudit) {
+      const previous = previousAudit.afterJson as { requestFingerprint?: string; result?: { id: string } } | null;
+      if (previous?.requestFingerprint !== fingerprint || !previous.result) throw new RewardServiceError("INVALID_INPUT", "Mã idempotency đã được dùng cho dữ liệu khác.");
+      return previous.result;
+    }
     const [member] = await tx.select({ studentId: classStudents.studentId }).from(classStudents).innerJoin(students, eq(students.id, classStudents.studentId)).where(and(eq(classStudents.classId, parsed.data.classId), eq(classStudents.studentId, parsed.data.studentId), isNull(classStudents.leftAt), eq(students.status, "active"), eq(students.organizationId, access.organizationId))).limit(1);
     if (!member) throw new RewardServiceError("STUDENT_NOT_IN_CLASS", "Học sinh không thuộc lớp này.");
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:reward:${parsed.data.classId}:${parsed.data.rewardId}`}, 0))`);
@@ -57,6 +68,7 @@ export async function redeemReward(input: unknown, actorUserId: string) {
       if (!updatedReward) throw new RewardServiceError("REWARD_NOT_AVAILABLE", "Phần thưởng vừa hết số lượng.");
     }
     await tx.insert(auditLogs).values({ organizationId: access.organizationId, actorUserId, entityType: "reward_redemption", entityId: redemption.id, action: "requested", afterJson: { costStars: reward.costStars, rewardId: reward.id, studentId: parsed.data.studentId } });
+    await tx.insert(auditLogs).values({ organizationId: access.organizationId, actorUserId, entityType: "reward_redemption_idempotency", entityId: idempotencyKey, action: "created", afterJson: { requestFingerprint: fingerprint, result: redemption } });
     await notifyClassStaff(tx, parsed.data.classId, "reward_redemption_requested");
     return redemption;
   });

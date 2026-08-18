@@ -20,7 +20,7 @@ export function TeacherRewardManager({ classId, students, rewards, initialRedemp
   async function redeem(rewardId: string) {
     if (!studentId) { setMessage("Chưa có học sinh để đổi quà."); return; }
     setBusy(true); setMessage(null);
-    try { const response = await fetch("/api/teacher/rewards/redeem", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ classId, studentId, rewardId }) }); const payload = await response.json().catch(() => null) as { error?: string }; if (!response.ok) throw new Error(payload?.error || "Không thể đổi quà."); setMessage("Đã tạo yêu cầu đổi quà."); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Không thể đổi quà."); } finally { setBusy(false); }
+    try { const response = await fetch("/api/teacher/rewards/redeem", { method: "POST", headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ classId, studentId, rewardId }) }); const payload = await response.json().catch(() => null) as { error?: string }; if (!response.ok) throw new Error(payload?.error || "Không thể đổi quà."); setMessage("Đã tạo yêu cầu đổi quà."); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Không thể đổi quà."); } finally { setBusy(false); }
   }
   async function transition(redemptionId: string, status: RedemptionStatus) {
     setBusy(true); setMessage(null);

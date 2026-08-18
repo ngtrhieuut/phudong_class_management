@@ -4,6 +4,7 @@ import {
   PRAISE_MEDIA_MAX_BYTES,
   parsePraiseMediaUploadPayload,
   validatePraiseMediaContent,
+  validatePraiseMediaMagicBytes,
   validatePraiseMediaPathname,
 } from '../../src/lib/media/praise-media';
 
@@ -41,5 +42,11 @@ describe('praise media validation', () => {
     expect(() => validatePraiseMediaContent('image/jpeg', PRAISE_MEDIA_MAX_BYTES + 1)).toThrow(
       'File phải là ảnh/video được hỗ trợ và không quá 50 MB.',
     );
+  });
+
+  it('requires the uploaded bytes to match the declared media type', () => {
+    expect(() => validatePraiseMediaMagicBytes('image/png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).not.toThrow();
+    expect(() => validatePraiseMediaMagicBytes('image/png', new Uint8Array([0xff, 0xd8, 0xff]))).toThrow('Nội dung file không khớp');
+    expect(() => validatePraiseMediaMagicBytes('video/mp4', new Uint8Array([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]))).not.toThrow();
   });
 });

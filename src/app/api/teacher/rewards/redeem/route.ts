@@ -12,9 +12,11 @@ export async function POST(request: Request) {
   if (!authConfigured) return NextResponse.json({ error: "Authentication is not configured." }, { status: 503, headers: noStoreHeaders() });
   const session = await getUserSession();
   if (!session?.user) return NextResponse.json({ error: "Bạn cần đăng nhập." }, { status: 401, headers: noStoreHeaders() });
+  const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+  if (!idempotencyKey) return NextResponse.json({ error: "Thiếu idempotency key." }, { status: 400, headers: noStoreHeaders() });
   try {
     await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
-    const result = await redeemReward(await request.json(), session.user.id);
+    const result = await redeemReward(await request.json(), session.user.id, idempotencyKey);
     return NextResponse.json({ data: result }, { status: 201, headers: noStoreHeaders() });
   } catch (error) {
     if (error instanceof RewardServiceError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.code === "FORBIDDEN_CLASS_ACCESS" ? 403 : 409, headers: noStoreHeaders() });

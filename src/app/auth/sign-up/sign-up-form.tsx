@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/client";
 import { signUpInputSchema } from "@/lib/validation";
 
-export function SignUpForm({ callbackPath = "/teacher/dashboard" }: { callbackPath?: string }) {
+export function SignUpForm({ callbackPath = "/teacher/onboarding" }: { callbackPath?: string }) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);

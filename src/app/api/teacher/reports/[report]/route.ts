@@ -1,7 +1,5 @@
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { authConfigured, getUserSession } from "@/lib/auth/server";
-import { db } from "@/db";
-import { auditLogs } from "@/db/schema";
 import { buildCsv, type CsvRow } from "@/lib/reports/csv";
 import {
   getTeacherActivityLedger,
@@ -85,17 +83,6 @@ function csvResponse(reportType: TeacherReportType, result: ReportPageMetadata, 
   });
 }
 
-async function recordReportExport(userId: string, reportType: TeacherReportType, result: ReportPageMetadata, month?: string) {
-  await db.insert(auditLogs).values({
-    organizationId: result.classContext.organizationId,
-    actorUserId: userId,
-    entityType: "report_export",
-    entityId: result.classContext.id,
-    action: "exported",
-    afterJson: { reportType, page: result.page, pageSize: result.pageSize, month: month ?? null },
-  });
-}
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ report: string }> },
@@ -117,7 +104,6 @@ export async function GET(
     if (parsedQuery.type === "activity") {
       const result = await getTeacherActivityLedger(session.user.id, parsedQuery.query);
       if (!result) return new Response("Forbidden", { status: 403 });
-      await recordReportExport(session.user.id, reportType, result);
       return csvResponse(
         reportType,
         result,
@@ -140,7 +126,6 @@ export async function GET(
     if (parsedQuery.type === "assignments") {
       const result = await getTeacherTaskAssignmentsReport(session.user.id, parsedQuery.query);
       if (!result) return new Response("Forbidden", { status: 403 });
-      await recordReportExport(session.user.id, reportType, result);
       return csvResponse(
         reportType,
         result,
@@ -164,7 +149,6 @@ export async function GET(
 
     const result = await getTeacherMonthlySummary(session.user.id, parsedQuery.query);
     if (!result) return new Response("Forbidden", { status: 403 });
-    await recordReportExport(session.user.id, reportType, result, parsedQuery.query.month);
     return csvResponse(
       reportType,
       result,

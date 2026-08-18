@@ -19,10 +19,6 @@ export const dynamic = "force-dynamic";
 
 const clientPayloadSchema = z.object({ classId: z.string().uuid(), postId: z.string().uuid() });
 
-function isGenerateTokenBody(body: HandleUploadBody) {
-  return body.type === "blob.generate-client-token";
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ postId: string }> },
@@ -36,22 +32,19 @@ export async function POST(
   if (!body || (body.type !== "blob.generate-client-token" && body.type !== "blob.upload-completed")) {
     return NextResponse.json({ error: "Upload request không hợp lệ." }, { status: 422, headers: noStoreHeaders() });
   }
-  if (body.type === "blob.generate-client-token" && !isSameOrigin(request)) {
+  if (!isSameOrigin(request)) {
     return NextResponse.json({ error: "Yêu cầu không hợp lệ." }, { status: 403, headers: noStoreHeaders() });
   }
   if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_STORE_ID) {
     return NextResponse.json({ error: "Private media storage chưa được cấu hình.", code: "STORAGE_NOT_CONFIGURED" }, { status: 503, headers: noStoreHeaders() });
   }
 
-  let actorUserId: string | null = null;
-  if (isGenerateTokenBody(body)) {
-    const session = await getUserSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Bạn cần đăng nhập." }, { status: 401, headers: noStoreHeaders() });
-    }
-    const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
-    actorUserId = appUser.id;
+  const session = await getUserSession();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Bạn cần đăng nhập." }, { status: 401, headers: noStoreHeaders() });
   }
+  const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name });
+  const actorUserId = appUser.id;
 
   try {
     const jsonResponse = await handleUpload({
@@ -87,6 +80,7 @@ export async function POST(
       onUploadCompleted: async ({ blob, tokenPayload }) => {
         const parsedPayload = parsePraiseMediaUploadPayload(tokenPayload ?? null);
         if (parsedPayload.postId !== postId) throw new PraiseMediaError("INVALID_INPUT", "Bài tuyên dương không hợp lệ.");
+        if (parsedPayload.actorUserId !== actorUserId) throw new PraiseMediaError("FORBIDDEN", "Upload session không hợp lệ.");
         await persistPraiseMedia({ blob, tokenPayload });
       },
     });

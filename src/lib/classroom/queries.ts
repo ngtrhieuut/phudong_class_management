@@ -116,6 +116,7 @@ function accessibleClassCondition(userId: string, classId?: string) {
     eq(classMemberships.userId, userId),
     inArray(classMemberships.role, teacherRoles),
     eq(users.status, "active"),
+    sql`coalesce(${classes.settingsJson}->>'archived', 'false') <> 'true'`,
     classId ? eq(classes.id, classId) : undefined,
   );
 }

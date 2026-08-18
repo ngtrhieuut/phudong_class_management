@@ -12,14 +12,18 @@ let client: AppSql | undefined;
 let pool: Pool | undefined;
 let database: AppDatabase | undefined;
 
+function getRuntimeDatabaseUrl() {
+  return process.env.DATABASE_URL_RUNTIME ?? process.env.DATABASE_URL;
+}
+
 function getSqlClient(): AppSql {
   if (client) {
     return client;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = getRuntimeDatabaseUrl();
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required when a database query is executed.');
+    throw new Error('DATABASE_URL_RUNTIME or DATABASE_URL is required when a database query is executed.');
   }
 
   client = neon(databaseUrl);
@@ -31,9 +35,9 @@ function getDatabasePool() {
     return pool;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = getRuntimeDatabaseUrl();
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required when a database query is executed.');
+    throw new Error('DATABASE_URL_RUNTIME or DATABASE_URL is required when a database query is executed.');
   }
 
   // Vercel production uses Node 24, but local development and CI may use an
@@ -61,7 +65,6 @@ const lazySqlTarget = ((strings: TemplateStringsArray, ...params: unknown[]) =>
 
 const lazyQuery = ((...args: Parameters<AppSql['query']>) =>
   getSqlClient().query(...args)) as AppSql['query'];
-const lazyUnsafe = ((rawSql: string) => getSqlClient().unsafe(rawSql)) as AppSql['unsafe'];
 const lazyTransaction = ((...args: Parameters<AppSql['transaction']>) =>
   getSqlClient().transaction(...args)) as AppSql['transaction'];
 
@@ -76,9 +79,6 @@ export const sql = new Proxy(lazySqlTarget, {
   get(_target, property) {
     if (property === 'query') {
       return lazyQuery;
-    }
-    if (property === 'unsafe') {
-      return lazyUnsafe;
     }
     if (property === 'transaction') {
       return lazyTransaction;

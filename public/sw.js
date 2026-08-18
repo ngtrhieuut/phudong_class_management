@@ -1,7 +1,5 @@
-const CACHE_NAME = "phudong-shell-v1";
+const CACHE_NAME = "phudong-shell-v2";
 const APP_SHELL = [
-  "/",
-  "/auth/sign-in",
   "/manifest.webmanifest",
   "/icons/phudong-192.svg",
   "/icons/phudong-512.svg",
@@ -31,11 +29,10 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Never cache authenticated pages or API responses containing student data.
-  if (
-    url.pathname.startsWith("/api/") ||
-    url.pathname.startsWith("/teacher/") ||
-    url.pathname.startsWith("/parent/")
-  ) {
+  const isProtectedPath = ["/api", "/teacher", "/parent", "/admin", "/auth"].some(
+    (prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`),
+  );
+  if (isProtectedPath) {
     return;
   }
 
