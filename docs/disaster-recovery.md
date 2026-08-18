@@ -26,4 +26,4 @@ Mỗi restore drill phải lưu branch ID, timestamp, schema diff, invariant res
 
 - Neon main `br-small-dew-afcozbtg`: 28 public tables, 0 policy, 0 bảng bật RLS; invariant read-only cho avatar/orphan class-student/orphan student link/negative snapshot đều bằng 0.
 - Rehearsal branch `br-empty-scene-afpgv9al`: 28 public tables, 1 policy và 1 bảng RLS do test role/policy rehearsal. Schema diff chỉ phản ánh rehearsal role/grants/policy; không áp dụng vào main.
-- Release `e3ab1e2` không có database migration mới. `npm run db:check` kiểm tra migration files; `npm run db:verify` là contract check read-only với schema live và fail nếu thiếu bảng/cột/index quan trọng. CI chỉ bật live check qua `ENABLE_DB_VERIFY=true` và runtime connection riêng.
+- Release `e3ab1e2` và hardening commit `88c6a3d` không có database migration mới. `npm run db:check` kiểm tra migration files; `npm run db:verify` là contract check read-only với schema live và fail nếu thiếu bảng/cột/index quan trọng. CI chỉ bật live check qua `ENABLE_DB_VERIFY=true` và runtime connection riêng.
