@@ -46,7 +46,9 @@ function getDatabasePool() {
   neonConfig.webSocketConstructor ??= WebSocket;
   pool = new Pool({ connectionString: databaseUrl, max: 1 });
   pool.on('error', (error: unknown) => {
-    console.error('[db] Neon pool error', error instanceof Error ? error.message : error);
+    console.error('[db] Neon pool error', {
+      name: error instanceof Error ? error.name : 'UnknownError',
+    });
   });
   return pool;
 }

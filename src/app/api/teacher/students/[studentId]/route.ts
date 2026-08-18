@@ -22,7 +22,9 @@ function errorResponse(error: unknown, fallback: string) {
     const status = error.code === "FORBIDDEN_CLASS_ACCESS" ? 403 : error.code === "STUDENT_NOT_IN_CLASS" || error.code === "NOT_FOUND" ? 404 : error.code === "DUPLICATE_CODE" || error.code === "SEAT_TAKEN" ? 409 : 400;
     return NextResponse.json({ error: error.message, code: error.code }, { status, headers: noStoreHeaders() });
   }
-  console.error("[teacher/students] mutation failed", error instanceof Error ? { name: error.name, message: error.message } : error);
+  console.error("[teacher/students] mutation failed", {
+    name: error instanceof Error ? error.name : "UnknownError",
+  });
   return NextResponse.json({ error: fallback }, { status: 500, headers: noStoreHeaders() });
 }
 

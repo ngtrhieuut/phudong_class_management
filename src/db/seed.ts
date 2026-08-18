@@ -375,6 +375,6 @@ async function seed() {
 }
 
 seed().catch((error: unknown) => {
-  console.error('Demo seed failed:', error);
+  console.error('Demo seed failed:', error instanceof Error ? error.name : 'UnknownError');
   process.exitCode = 1;
 });

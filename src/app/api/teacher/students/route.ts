@@ -24,7 +24,9 @@ export async function GET(request: Request) {
     if (error instanceof Error && error.message === "FORBIDDEN_CLASS_ACCESS") {
       return NextResponse.json({ error: "Bạn không có quyền xem lớp này." }, { status: 403, headers: noStoreHeaders() });
     }
-    console.error("[teacher/students] avatar snapshot failed", error instanceof Error ? { name: error.name, message: error.message } : error);
+    console.error("[teacher/students] avatar snapshot failed", {
+      name: error instanceof Error ? error.name : "UnknownError",
+    });
     return NextResponse.json({ error: "Không thể tải avatar học sinh lúc này." }, { status: 500, headers: noStoreHeaders() });
   }
 }
