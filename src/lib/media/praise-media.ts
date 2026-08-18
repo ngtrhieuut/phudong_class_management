@@ -23,12 +23,17 @@ import {
 } from "@/db/schema";
 
 export const PRAISE_MEDIA_OWNER_TYPE = "praise_post";
-export const PRAISE_MEDIA_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"] as const;
+export const PRAISE_MEDIA_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const PRAISE_MEDIA_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+// Kept as a planning limit for a future quarantined video worker. Video is
+// intentionally not in PRAISE_MEDIA_CONTENT_TYPES until metadata stripping
+// and output verification are implemented outside the request path.
 export const PRAISE_MEDIA_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
-export const PRAISE_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
+export const PRAISE_MEDIA_MAX_BYTES = PRAISE_MEDIA_IMAGE_MAX_BYTES;
 export const PRAISE_MEDIA_MAX_IMAGE_DIMENSION = 2400;
 const PRAISE_MEDIA_MAX_IMAGE_PIXELS = 24_000_000;
+export const PRAISE_MEDIA_VIDEO_DISABLED_MESSAGE = "Video tạm thời chưa được hỗ trợ để bảo vệ metadata riêng tư. Chỉ có thể upload ảnh đã được làm sạch.";
+export const PRAISE_MEDIA_QUARANTINE_PREFIX = "praise/quarantine/";
 
 const teacherRoles = ["homeroom_teacher", "teacher"] as const;
 const mediaWriteRoles = ["homeroom_teacher", "teacher"] as const;
@@ -84,12 +89,24 @@ export function validatePraiseMediaPathname(pathname: string) {
   return normalized;
 }
 
+export function validatePraiseMediaQuarantinePathname(pathname: string) {
+  const normalized = validatePraiseMediaPathname(pathname);
+  if (!normalized.startsWith(PRAISE_MEDIA_QUARANTINE_PREFIX)) {
+    throw new PraiseMediaError("INVALID_INPUT", "Tên file upload không hợp lệ.");
+  }
+  return normalized;
+}
+
 export function validatePraiseMediaContent(contentType: string, size: number) {
-  const maxBytes = maxBytesForContentType(contentType);
+  if (contentType.startsWith("video/")) {
+    throw new PraiseMediaError("INVALID_INPUT", PRAISE_MEDIA_VIDEO_DISABLED_MESSAGE);
+  }
+  const isImage = contentType.startsWith("image/");
+  const maxBytes = isImage ? maxBytesForContentType(contentType) : 0;
   if (!isAllowedContentType(contentType) || !Number.isFinite(size) || size <= 0 || size > maxBytes) {
     throw new PraiseMediaError(
       "INVALID_INPUT",
-      contentType.startsWith("image/") ? "Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB." : "Video phải thuộc loại được hỗ trợ và không quá 50 MB.",
+      isImage ? "Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB." : "Loại media này chưa được hỗ trợ.",
     );
   }
 }
@@ -99,6 +116,9 @@ function hasBytesAt(bytes: Uint8Array, offset: number, expected: number[]) {
 }
 
 export function validatePraiseMediaMagicBytes(contentType: string, bytes: Uint8Array) {
+  if (contentType.startsWith("video/")) {
+    throw new PraiseMediaError("INVALID_INPUT", PRAISE_MEDIA_VIDEO_DISABLED_MESSAGE);
+  }
   const matches =
     (contentType === "image/jpeg" && hasBytesAt(bytes, 0, [0xff, 0xd8, 0xff])) ||
     (contentType === "image/png" && hasBytesAt(bytes, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
@@ -249,71 +269,85 @@ export async function persistPraiseMedia(input: {
   blob: { url: string; contentType: string };
   tokenPayload: string | null | undefined;
 }) {
-  const payload = parsePraiseMediaUploadPayload(input.tokenPayload ?? null);
-  const access = await getWritablePraisePostAccess(payload.actorUserId, payload.postId, payload.classId);
-  if (!access || access.organizationId !== payload.organizationId) {
-    throw new PraiseMediaError("FORBIDDEN", "Bạn không có quyền upload cho bài này.");
-  }
-  const validatedBlob = await validatePraiseMediaBlob(input.blob);
-
-  const [post] = await db
-    .select({ id: praisePosts.id, classId: praisePosts.classId, organizationId: classes.organizationId })
-    .from(praisePosts)
-    .innerJoin(classes, eq(classes.id, praisePosts.classId))
-    .where(and(eq(praisePosts.id, payload.postId), eq(praisePosts.classId, payload.classId), eq(classes.organizationId, payload.organizationId)))
-    .limit(1);
-  if (!post) throw new PraiseMediaError("NOT_FOUND", "Không tìm thấy bài tuyên dương.");
-
   let storageKey = input.blob.url;
-  let mimeType = validatedBlob.contentType;
-  let width: number | null = null;
-  let height: number | null = null;
-  if (input.blob.contentType.startsWith("image/") && validatedBlob.body) {
-    const sanitized = await sanitizePraiseImageBuffer(validatedBlob.body);
-    const sanitizedPath = `praise/sanitized/${createHash("sha256").update(input.blob.url).digest("hex")}.webp`;
-    let sanitizedBlob: Awaited<ReturnType<typeof put>> | null = null;
-    try {
-      sanitizedBlob = await put(sanitizedPath, sanitized.buffer, {
-        access: "private",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: sanitized.contentType,
-      });
-      if (sanitizedBlob.url !== input.blob.url) await del(input.blob.url);
-    } catch {
-      if (sanitizedBlob && sanitizedBlob.url !== input.blob.url) await del(sanitizedBlob.url).catch(() => undefined);
-      throw new PraiseMediaError("STORAGE_NOT_CONFIGURED", "Không thể lưu ảnh đã được làm sạch vào storage.");
+  try {
+    const payload = parsePraiseMediaUploadPayload(input.tokenPayload ?? null);
+    const access = await getWritablePraisePostAccess(payload.actorUserId, payload.postId, payload.classId);
+    if (!access || access.organizationId !== payload.organizationId) {
+      throw new PraiseMediaError("FORBIDDEN", "Bạn không có quyền upload cho bài này.");
     }
-    storageKey = sanitizedBlob.url;
-    mimeType = sanitized.contentType;
-    width = sanitized.width;
-    height = sanitized.height;
-  }
+    const validatedBlob = await validatePraiseMediaBlob(input.blob);
 
-  const [asset] = await db
-    .insert(mediaAssets)
-    .values({
-      ownerType: PRAISE_MEDIA_OWNER_TYPE,
-      ownerId: payload.postId,
-      storageKey,
-      mimeType,
-      width,
-      height,
-    })
-    .onConflictDoNothing({ target: mediaAssets.storageKey })
-    .returning({ id: mediaAssets.id, mimeType: mediaAssets.mimeType });
+    const [post] = await db
+      .select({ id: praisePosts.id, classId: praisePosts.classId, organizationId: classes.organizationId })
+      .from(praisePosts)
+      .innerJoin(classes, eq(classes.id, praisePosts.classId))
+      .where(and(eq(praisePosts.id, payload.postId), eq(praisePosts.classId, payload.classId), eq(classes.organizationId, payload.organizationId)))
+      .limit(1);
+    if (!post) throw new PraiseMediaError("NOT_FOUND", "Không tìm thấy bài tuyên dương.");
 
-  if (asset) {
-    await db.insert(auditLogs).values({
-      organizationId: post.organizationId,
-      actorUserId: payload.actorUserId,
-      entityType: "media_asset",
-      entityId: asset.id,
-      action: "created",
-      afterJson: { ownerType: PRAISE_MEDIA_OWNER_TYPE, ownerId: payload.postId, mimeType: asset.mimeType },
+    let mimeType = validatedBlob.contentType;
+    let width: number | null = null;
+    let height: number | null = null;
+    if (input.blob.contentType.startsWith("image/") && validatedBlob.body) {
+      const sanitized = await sanitizePraiseImageBuffer(validatedBlob.body);
+      const sanitizedPath = `praise/sanitized/${createHash("sha256").update(input.blob.url).digest("hex")}.webp`;
+      let sanitizedBlob: Awaited<ReturnType<typeof put>>;
+      try {
+        sanitizedBlob = await put(sanitizedPath, sanitized.buffer, {
+          access: "private",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: sanitized.contentType,
+        });
+      } catch {
+        throw new PraiseMediaError("STORAGE_NOT_CONFIGURED", "Không thể lưu ảnh đã được làm sạch vào storage.");
+      }
+      storageKey = sanitizedBlob.url;
+      mimeType = sanitized.contentType;
+      width = sanitized.width;
+      height = sanitized.height;
+    }
+
+    const asset = await db.transaction(async (tx) => {
+      const [createdAsset] = await tx
+        .insert(mediaAssets)
+        .values({
+          ownerType: PRAISE_MEDIA_OWNER_TYPE,
+          ownerId: payload.postId,
+          storageKey,
+          mimeType,
+          width,
+          height,
+        })
+        .onConflictDoNothing({ target: mediaAssets.storageKey })
+        .returning({ id: mediaAssets.id, mimeType: mediaAssets.mimeType });
+
+      if (createdAsset) {
+        await tx.insert(auditLogs).values({
+          organizationId: post.organizationId,
+          actorUserId: payload.actorUserId,
+          entityType: "media_asset",
+          entityId: createdAsset.id,
+          action: "created",
+          afterJson: { ownerType: PRAISE_MEDIA_OWNER_TYPE, ownerId: payload.postId, mimeType: createdAsset.mimeType },
+        });
+      }
+      return createdAsset ?? null;
     });
+
+    // The DB row is durable now. A failed source cleanup is safe to retry via
+    // the reconciliation script; do not delete the canonical sanitized asset.
+    if (storageKey !== input.blob.url) await del(input.blob.url).catch(() => undefined);
+    return asset;
+  } catch (error) {
+    // Callback failures must not leave a client-uploaded quarantine object or
+    // a sanitized object without a DB row. Cleanup is best effort and can be
+    // retried by the manual reconciliation command.
+    await del(input.blob.url).catch(() => undefined);
+    if (storageKey !== input.blob.url) await del(storageKey).catch(() => undefined);
+    throw error;
   }
-  return asset ?? null;
 }
 
 async function getMediaTarget(mediaId: string) {
@@ -376,6 +410,15 @@ async function canAdminViewMedia(userId: string, organizationId: string) {
   return Boolean(access);
 }
 
+async function canViewOperationalClass(classId: string) {
+  const [access] = await db
+    .select({ id: classes.id })
+    .from(classes)
+    .where(and(eq(classes.id, classId), operationalClassCondition()))
+    .limit(1);
+  return Boolean(access);
+}
+
 async function canGuardianViewMedia(userId: string, target: NonNullable<Awaited<ReturnType<typeof getMediaTarget>>>) {
   if (target.visibility === "teacher_only") return false;
   const otherPostStudents = aliasedTable(praisePostStudents, "other_guardian_praise_post_students");
@@ -410,7 +453,11 @@ export async function getAccessiblePraiseMedia(mediaId: string, userId: string) 
   const target = await getMediaTarget(mediaId);
   if (!target) return null;
   if (await canTeacherViewMedia(userId, target.classId)) return target;
+  // Admins retain organization-scoped access for retention and deletion
+  // operations, including archived classes. Guardian access remains limited
+  // to the active teaching flow below.
   if (await canAdminViewMedia(userId, target.organizationId)) return target;
+  if (!(await canViewOperationalClass(target.classId))) return null;
   if (await canGuardianViewMedia(userId, target)) return target;
   return null;
 }

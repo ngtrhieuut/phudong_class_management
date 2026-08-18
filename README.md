@@ -51,7 +51,7 @@ Các route teacher và parent đều dùng server-side session guard; dữ liệ
 
 Liên kết guardian hỗ trợ hai cách: liên kết ngay với account đã đăng nhập, hoặc tạo invitation token một lần có hạn dùng; phụ huynh phải đăng nhập đúng email nhận lời mời trước khi xác nhận. Thu hồi sẽ tắt quyền xem và nhận thông báo nhưng vẫn giữ audit log.
 
-Ảnh/video tuyên dương dùng private Vercel Blob, client upload trực tiếp để không đi qua giới hạn body của Vercel Function; DB chỉ lưu metadata và URL private. Nếu chưa tạo Blob store, chức năng text/parent vẫn hoạt động và upload sẽ fail-closed với thông báo cấu hình storage.
+Ảnh tuyên dương dùng private Vercel Blob, client upload trực tiếp để không đi qua giới hạn body của Vercel Function; ảnh được làm sạch metadata trước khi ghi DB. Video production hiện fail-closed cho đến khi có pipeline transcode/metadata stripping riêng; DB chỉ lưu metadata và URL private. Nếu chưa tạo Blob store, chức năng text/parent vẫn hoạt động và upload sẽ fail-closed với thông báo cấu hình storage.
 
 Ứng dụng có PWA foundation: manifest, icon, standalone metadata và service worker chỉ cache app shell/static assets. Các route teacher, parent và API chứa dữ liệu học sinh không được cache.
 

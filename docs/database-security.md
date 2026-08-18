@@ -7,6 +7,7 @@ Ngày kiểm tra live: 2026-08-18 (Asia/Ho_Chi_Minh).
 - Project `shiny-field-99523851`, branch `main` `br-small-dew-afcozbtg`, database `neondb`, PostgreSQL 18.4.
 - Main đang kết nối bằng `neondb_owner`; role có `CREATEROLE`, `CREATEDB`, `BYPASSRLS`.
 - Các bảng `public` hiện chưa bật RLS và chưa có policy; chưa có application runtime role riêng.
+- Vercel environment-name audit (read-only, 2026-08-18): Production có `DATABASE_URL` và `DATABASE_URL_UNPOOLED` nhưng chưa có `DATABASE_URL_RUNTIME`; Preview hiện chưa có environment variables. Vì vậy chưa có bằng chứng rằng Vercel runtime đang dùng least-privilege connection.
 - Vì vậy database-level tenant isolation chưa hoàn tất. Boundary đang chạy hiện tại là session → service authorization → tenant-scoped Drizzle query.
 
 ## Kế hoạch runtime role/RLS

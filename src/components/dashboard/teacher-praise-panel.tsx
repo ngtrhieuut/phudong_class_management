@@ -16,9 +16,8 @@ type PraisePost = {
   media: Array<{ id: string; mimeType: string }>;
 };
 
-const allowedMediaTypes = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"];
+const allowedMediaTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxImageBytes = 10 * 1024 * 1024;
-const maxVideoBytes = 50 * 1024 * 1024;
 const maxImageDimension = 1600;
 
 async function optimizeImageFile(file: File) {
@@ -72,10 +71,15 @@ export function TeacherPraisePanel({ classId, students, initialPosts }: { classI
       setMediaFile(null);
       return;
     }
-    const maxBytes = file.type.startsWith("image/") ? maxImageBytes : maxVideoBytes;
+    if (file.type.startsWith("video/")) {
+      setMediaFile(null);
+      setMessage("Video tạm thời chưa được hỗ trợ để bảo vệ metadata riêng tư. Chỉ có thể upload ảnh đã được làm sạch.");
+      return;
+    }
+    const maxBytes = maxImageBytes;
     if (!allowedMediaTypes.includes(file.type) || file.size <= 0 || file.size > maxBytes) {
       setMediaFile(null);
-      setMessage(file.type.startsWith("image/") ? "Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB." : "Video phải thuộc loại được hỗ trợ và không quá 50 MB.");
+      setMessage("Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB.");
       return;
     }
     setIsOptimizing(file.type.startsWith("image/"));
@@ -105,7 +109,7 @@ export function TeacherPraisePanel({ classId, students, initialPosts }: { classI
       createdPostId = payload.data.id;
 
       if (mediaFile) {
-        await upload(mediaFile.name, mediaFile, {
+        await upload(`praise/quarantine/${crypto.randomUUID()}`, mediaFile, {
           access: "private",
           handleUploadUrl: `/api/teacher/praise/${payload.data.id}/media`,
           clientPayload: JSON.stringify({ classId, postId: payload.data.id }),
@@ -172,7 +176,7 @@ export function TeacherPraisePanel({ classId, students, initialPosts }: { classI
         <label className="mt-4 block"><span className="font-heading text-sm font-bold text-[var(--on-surface)]">Tiêu đề</span><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} className="mt-2 min-h-11 w-full rounded-xl border-2 border-transparent bg-[var(--surface-low)] px-4 font-body outline-none focus:border-[var(--primary-fixed)]" placeholder="Ví dụ: Một nỗ lực rất đáng khen" /></label>
         <label className="mt-4 block"><span className="font-heading text-sm font-bold text-[var(--on-surface)]">Lời khen</span><textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={10000} rows={4} className="mt-2 w-full rounded-xl border-2 border-transparent bg-[var(--surface-low)] px-4 py-3 font-body outline-none focus:border-[var(--primary-fixed)]" placeholder="Viết điều tích cực con đã làm..." /></label>
         <label className="mt-4 block"><span className="font-heading text-sm font-bold text-[var(--on-surface)]">Hiển thị</span><select value={visibility} onChange={(event) => setVisibility(event.target.value as PraisePost["visibility"])} className="mt-2 min-h-11 w-full rounded-xl bg-[var(--surface-low)] px-4 font-body"><option value="related_guardians">Học sinh liên quan và phụ huynh</option><option value="class">Cả lớp; phụ huynh chỉ thấy bài riêng của con</option><option value="teacher_only">Chỉ giáo viên (bản nháp)</option></select><span className="mt-2 block font-body text-xs leading-5 text-[var(--on-surface-variant)]">Bài chọn nhiều học sinh vẫn chỉ hiển thị trong teacher feed; parent feed luôn lọc riêng theo từng học sinh để bảo vệ dữ liệu.</span></label>
-        <label className="mt-4 block"><span className="font-heading text-sm font-bold text-[var(--on-surface)]">Ảnh/video đính kèm <span className="font-body text-xs font-normal text-[var(--on-surface-variant)]">(ảnh tối đa 10 MB · video tối đa 50 MB)</span></span><span className="mt-2 flex min-h-12 items-center gap-2 rounded-xl bg-[var(--surface-low)] px-4 font-body text-sm text-[var(--on-surface-variant)]"><FileArrowUp size={20} /><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => void selectMedia(event.target.files?.[0])} className="min-w-0 flex-1" /></span>{isOptimizing ? <span className="mt-2 block font-body text-xs text-[var(--primary)]">Đang tối ưu ảnh...</span> : null}{mediaFile ? <span className="mt-2 block truncate font-body text-xs text-[var(--on-surface-variant)]">Đã chọn: {mediaFile.name}</span> : null}</label>
+        <label className="mt-4 block"><span className="font-heading text-sm font-bold text-[var(--on-surface)]">Ảnh đính kèm <span className="font-body text-xs font-normal text-[var(--on-surface-variant)]">(tối đa 10 MB · ảnh được làm sạch metadata trước khi lưu)</span></span><span className="mt-2 flex min-h-12 items-center gap-2 rounded-xl bg-[var(--surface-low)] px-4 font-body text-sm text-[var(--on-surface-variant)]"><FileArrowUp size={20} /><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectMedia(event.target.files?.[0])} className="min-w-0 flex-1" /></span>{isOptimizing ? <span className="mt-2 block font-body text-xs text-[var(--primary)]">Đang tối ưu ảnh...</span> : null}{mediaFile ? <span className="mt-2 block truncate font-body text-xs text-[var(--on-surface-variant)]">Đã chọn: {mediaFile.name}</span> : null}</label>
         <button type="button" disabled={busy || isOptimizing} onClick={() => void createPost()} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--primary)] px-5 font-heading text-sm font-bold text-white disabled:opacity-50"><CheckCircle size={19} weight="fill" /> {busy ? uploadProgress !== null ? `Đang upload ${uploadProgress}%...` : "Đang lưu..." : isOptimizing ? "Đang tối ưu ảnh..." : "Đăng tuyên dương"}</button>
         {message ? <p role="status" className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">{message}</p> : null}
       </section>

@@ -1,3 +1,4 @@
+import { del } from "@vercel/blob";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -10,8 +11,8 @@ import {
   persistPraiseMedia,
   PRAISE_MEDIA_CONTENT_TYPES,
   PRAISE_MEDIA_MAX_BYTES,
+  validatePraiseMediaQuarantinePathname,
   PraiseMediaError,
-  validatePraiseMediaPathname,
 } from "@/lib/media/praise-media";
 import { isSameOrigin, noStoreHeaders } from "@/lib/http/request-security";
 
@@ -64,7 +65,7 @@ export async function POST(
         }
         const access = await getWritablePraisePostAccess(actorUserId, parsedPayload.data.postId, parsedPayload.data.classId);
         if (!access) throw new PraiseMediaError("FORBIDDEN", "Bạn không có quyền upload cho bài này.");
-        validatePraiseMediaPathname(pathname);
+        validatePraiseMediaQuarantinePathname(pathname);
         return {
           allowedContentTypes: [...PRAISE_MEDIA_CONTENT_TYPES],
           maximumSizeInBytes: PRAISE_MEDIA_MAX_BYTES,
@@ -78,10 +79,15 @@ export async function POST(
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
-        const parsedPayload = parsePraiseMediaUploadPayload(tokenPayload ?? null);
-        if (parsedPayload.postId !== postId) throw new PraiseMediaError("INVALID_INPUT", "Bài tuyên dương không hợp lệ.");
-        if (parsedPayload.actorUserId !== actorUserId) throw new PraiseMediaError("FORBIDDEN", "Upload session không hợp lệ.");
-        await persistPraiseMedia({ blob, tokenPayload });
+        try {
+          const parsedPayload = parsePraiseMediaUploadPayload(tokenPayload ?? null);
+          if (parsedPayload.postId !== postId) throw new PraiseMediaError("INVALID_INPUT", "Bài tuyên dương không hợp lệ.");
+          if (parsedPayload.actorUserId !== actorUserId) throw new PraiseMediaError("FORBIDDEN", "Upload session không hợp lệ.");
+          await persistPraiseMedia({ blob, tokenPayload });
+        } catch (error) {
+          await del(blob.url).catch(() => undefined);
+          throw error;
+        }
       },
     });
     return NextResponse.json(jsonResponse, { headers: noStoreHeaders() });

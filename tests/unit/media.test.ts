@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   PRAISE_MEDIA_IMAGE_MAX_BYTES,
   PRAISE_MEDIA_MAX_BYTES,
-  PRAISE_MEDIA_VIDEO_MAX_BYTES,
+  PRAISE_MEDIA_VIDEO_DISABLED_MESSAGE,
   parsePraiseMediaUploadPayload,
   sanitizePraiseImageBuffer,
   validatePraiseMediaContent,
   validatePraiseMediaMagicBytes,
+  validatePraiseMediaQuarantinePathname,
   validatePraiseMediaPathname,
 } from '../../src/lib/media/praise-media';
 
@@ -31,6 +32,8 @@ describe('praise media validation', () => {
 
   it('accepts safe pathnames and rejects traversal/control characters', () => {
     expect(validatePraiseMediaPathname('praise/2026/photo.webp')).toBe('praise/2026/photo.webp');
+    expect(validatePraiseMediaQuarantinePathname('praise/quarantine/upload-1')).toBe('praise/quarantine/upload-1');
+    expect(() => validatePraiseMediaQuarantinePathname('praise/sanitized/photo.webp')).toThrow('Tên file upload không hợp lệ.');
     expect(() => validatePraiseMediaPathname('../private.txt')).toThrow('Tên file không hợp lệ.');
     expect(() => validatePraiseMediaPathname('praise\\photo.webp')).toThrow('Tên file không hợp lệ.');
     expect(() => validatePraiseMediaPathname('praise/\u0000photo.webp')).toThrow('Tên file không hợp lệ.');
@@ -38,16 +41,14 @@ describe('praise media validation', () => {
 
   it('enforces the allowlist and per-type size limits', () => {
     expect(validatePraiseMediaContent('image/webp', 1024)).toBeUndefined();
-    expect(validatePraiseMediaContent('video/mp4', PRAISE_MEDIA_VIDEO_MAX_BYTES)).toBeUndefined();
+    expect(() => validatePraiseMediaContent('video/mp4', 1024)).toThrow(PRAISE_MEDIA_VIDEO_DISABLED_MESSAGE);
     expect(() => validatePraiseMediaContent('image/svg+xml', 1024)).toThrow(
       'Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB.',
     );
     expect(() => validatePraiseMediaContent('image/jpeg', PRAISE_MEDIA_IMAGE_MAX_BYTES + 1)).toThrow(
       'Ảnh phải thuộc loại được hỗ trợ và không quá 10 MB.',
     );
-    expect(() => validatePraiseMediaContent('video/mp4', PRAISE_MEDIA_MAX_BYTES + 1)).toThrow(
-      'Video phải thuộc loại được hỗ trợ và không quá 50 MB.',
-    );
+    expect(PRAISE_MEDIA_MAX_BYTES).toBe(PRAISE_MEDIA_IMAGE_MAX_BYTES);
   });
 
   it('re-encodes images, caps dimensions, and strips source metadata', async () => {
@@ -73,6 +74,6 @@ describe('praise media validation', () => {
   it('requires the uploaded bytes to match the declared media type', () => {
     expect(() => validatePraiseMediaMagicBytes('image/png', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).not.toThrow();
     expect(() => validatePraiseMediaMagicBytes('image/png', new Uint8Array([0xff, 0xd8, 0xff]))).toThrow('Nội dung file không khớp');
-    expect(() => validatePraiseMediaMagicBytes('video/mp4', new Uint8Array([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]))).not.toThrow();
+    expect(() => validatePraiseMediaMagicBytes('video/mp4', new Uint8Array([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]))).toThrow(PRAISE_MEDIA_VIDEO_DISABLED_MESSAGE);
   });
 });
