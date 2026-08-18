@@ -27,6 +27,13 @@ describe("student avatar client reconciliation", () => {
     expect(applyStudentAvatarUpdates([makeStudent()])[0]?.avatarUrl).toBe("/avatars/male-01.webp");
   });
 
+  it("migrates legacy PNG cache entries to the current WebP asset", () => {
+    installSessionStorage();
+    window.sessionStorage.setItem("phudong.student-avatar-updates.v1", JSON.stringify({ "student-1": "/avatars/male-01.png" }));
+
+    expect(applyStudentAvatarUpdates([makeStudent()])[0]?.avatarUrl).toBe("/avatars/male-01.webp");
+  });
+
   it("does not let a stale non-null RSC value erase a just-saved avatar", () => {
     installSessionStorage();
     rememberStudentAvatar("student-1", "/avatars/male-01.webp");

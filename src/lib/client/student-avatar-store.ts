@@ -5,6 +5,12 @@ const STORAGE_KEY = "phudong.student-avatar-updates.v1";
 type AvatarUpdate = { url: string | null; savedAt: number };
 type AvatarUpdates = Record<string, AvatarUpdate>;
 
+function normalizeAvatarUrl(value: string | null): string | null {
+  if (!value) return value;
+  const legacyPath = value.match(/^\/avatars\/(male|female)-(0[1-5])\.png$/);
+  return legacyPath ? `/avatars/${legacyPath[1]}-${legacyPath[2]}.webp` : value;
+}
+
 function readUpdates(): AvatarUpdates {
   if (typeof window === "undefined") return {};
 
@@ -18,10 +24,10 @@ function readUpdates(): AvatarUpdates {
       Object.entries(parsed).flatMap(([studentId, value]) => {
         if (typeof value === "string") {
           // Keep compatibility with the first version of this store.
-          return [[studentId, { url: value, savedAt: Date.now() }]];
+          return [[studentId, { url: normalizeAvatarUrl(value), savedAt: Date.now() }]];
         }
         if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-        const url = "url" in value && (typeof value.url === "string" || value.url === null) ? value.url : undefined;
+        const url = "url" in value && (typeof value.url === "string" || value.url === null) ? normalizeAvatarUrl(value.url) : undefined;
         const savedAt = "savedAt" in value && typeof value.savedAt === "number" ? value.savedAt : null;
         return url !== undefined && savedAt !== null ? [[studentId, { url, savedAt }]] : [];
       }),
@@ -48,7 +54,7 @@ function writeUpdates(updates: AvatarUpdates) {
 
 export function rememberStudentAvatar(studentId: string, avatarUrl: string | null) {
   const updates = readUpdates();
-  updates[studentId] = { url: avatarUrl, savedAt: Date.now() };
+  updates[studentId] = { url: normalizeAvatarUrl(avatarUrl), savedAt: Date.now() };
   writeUpdates(updates);
 }
 
@@ -90,16 +96,17 @@ export function applyStudentAvatarSnapshots(
   const now = Date.now();
 
   for (const snapshot of snapshots) {
+    const avatarUrl = normalizeAvatarUrl(snapshot.avatarUrl);
     const current = updates[snapshot.id];
-    if (!current || current.url !== snapshot.avatarUrl) {
-      updates[snapshot.id] = { url: snapshot.avatarUrl, savedAt: now };
+    if (!current || current.url !== avatarUrl) {
+      updates[snapshot.id] = { url: avatarUrl, savedAt: now };
     }
   }
   writeUpdates(updates);
 
   return students.map((student) => {
     if (!avatarsByStudent.has(student.id)) return student;
-    const avatarUrl = avatarsByStudent.get(student.id) ?? null;
+    const avatarUrl = normalizeAvatarUrl(avatarsByStudent.get(student.id) ?? null);
     return student.avatarUrl === avatarUrl ? student : { ...student, avatarUrl };
   });
 }
