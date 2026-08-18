@@ -11,6 +11,7 @@ import {
   students,
 } from "@/db/schema";
 import { getTeacherClass } from "@/lib/classroom/queries";
+import { operationalClassCondition } from "@/lib/classroom/access";
 
 export async function getTeacherPraiseFeed(userId: string, classId?: string) {
   const classContext = await getTeacherClass(userId, classId);
@@ -68,6 +69,8 @@ export async function getParentPraisePosts(childStudentId: string) {
       and(
         eq(classStudents.studentId, childStudentId),
         isNull(classStudents.leftAt),
+        eq(students.status, "active"),
+        operationalClassCondition(),
         eq(praisePostStudents.studentId, childStudentId),
         inArray(praisePosts.visibility, ["class", "related_guardians"]),
         notExists(

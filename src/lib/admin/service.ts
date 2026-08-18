@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -118,7 +118,7 @@ export async function executeAdminAction(input: unknown, actorUserId: string) {
       const [existingMember] = await tx.select({ id: organizationMembers.id }).from(organizationMembers).where(and(eq(organizationMembers.organizationId, action.organizationId), eq(organizationMembers.userId, invitedUserId))).limit(1);
       if (existingMember) throw new AdminServiceError("CONFLICT", "Email này đã là thành viên của tổ chức.");
       await tx.insert(organizationMembers).values({ organizationId: action.organizationId, userId: invitedUserId, role: action.role });
-      await audit(tx, actorUserId, action.organizationId, "organization_member", invitedUserId, "invited", { emailHash: createHash("sha256").update(email).digest("hex"), role: action.role, existingAccount: Boolean(existingUser) });
+      await audit(tx, actorUserId, action.organizationId, "organization_member", invitedUserId, "invited", { role: action.role, existingAccount: Boolean(existingUser) });
       return { id: invitedUserId, status: existingUser?.status ?? "invited" };
     }
 

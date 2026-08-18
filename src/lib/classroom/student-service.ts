@@ -12,6 +12,7 @@ import {
   users,
 } from "@/db/schema";
 import { isAvatarPresetUrl } from "@/lib/avatar-presets";
+import { operationalClassCondition } from "@/lib/classroom/access";
 
 const writeRoles = ["homeroom_teacher", "teacher"] as const;
 const dateSchema = z
@@ -70,6 +71,7 @@ async function getWriteAccess(tx: Parameters<Parameters<typeof db.transaction>[0
         eq(classMemberships.classId, classId),
         inArray(classMemberships.role, writeRoles),
         eq(users.status, "active"),
+        operationalClassCondition(),
       ),
     )
     .limit(1);
@@ -159,7 +161,7 @@ export async function createStudent(input: unknown, actorUserId: string) {
       entityType: "student",
       entityId: student.id,
       action: "created",
-      afterJson: { classId: parsed.data.classId, studentCode: student.studentCode, fullName: student.fullName },
+      afterJson: { classId: parsed.data.classId, studentCode: student.studentCode },
     });
     return student;
   });
@@ -241,13 +243,14 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
       entityType: "student",
       entityId: studentId,
       action: "updated",
-      beforeJson: { studentCode: current.studentCode, fullName: current.fullName, seatNo: current.seatNo, groupName: current.groupName },
+      beforeJson: { studentCode: current.studentCode, seatNo: current.seatNo, groupName: current.groupName, classRoleId: current.classRoleId },
       afterJson: {
         classId: parsed.data.classId,
-        ...studentValues,
+        changedFields: Object.keys(studentValues).filter((field) => field !== "updatedAt"),
+        studentCode: nextCode,
         seatNo: parsed.data.seatNo !== undefined ? parsed.data.seatNo : current.seatNo,
         groupName: parsed.data.groupName !== undefined ? parsed.data.groupName : current.groupName,
-        ...(parsed.data.classRoleId !== undefined ? { classRoleId: nextClassRoleId } : {}),
+        classRoleId: parsed.data.classRoleId !== undefined ? nextClassRoleId : current.classRoleId,
       },
     });
     return { id: studentId, ...studentValues };

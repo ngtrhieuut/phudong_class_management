@@ -4,6 +4,7 @@ import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import {
   auditLogs,
   classes,
@@ -64,6 +65,7 @@ async function getWritableClass(tx: Transaction, actorUserId: string, classId: s
         eq(classMemberships.classId, classId),
         inArray(classMemberships.role, writeRoles),
         eq(users.status, "active"),
+        operationalClassCondition(),
       ),
     )
     .limit(1);
@@ -147,7 +149,6 @@ export async function createGuardianInvitation(input: unknown, actorUserId: stri
       afterJson: {
         classId: parsed.data.classId,
         studentId: parsed.data.studentId,
-        guardianEmail: normalizedEmail,
         expiresAt: expiresAt.toISOString(),
       },
     });

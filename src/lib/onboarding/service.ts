@@ -129,7 +129,7 @@ export async function getOnboardingState(userId: string) {
     .from(organizationMembers)
     .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
     .innerJoin(users, eq(users.id, organizationMembers.userId))
-    .where(and(eq(organizationMembers.userId, userId), eq(users.status, "active")))
+    .where(and(eq(organizationMembers.userId, userId), inArray(organizationMembers.role, ["admin", "teacher"]), eq(users.status, "active")))
     .limit(1);
   const [classContext] = membership
     ? await db.select({ id: classes.id, name: classes.name, grade: classes.grade, schoolYearName: schoolYears.name }).from(classMemberships).innerJoin(classes, eq(classes.id, classMemberships.classId)).innerJoin(schoolYears, eq(schoolYears.id, classes.schoolYearId)).where(and(eq(classMemberships.userId, userId), eq(classes.organizationId, membership.organizationId), eq(schoolYears.active, true), sql`coalesce(${classes.settingsJson}->>'archived', 'false') <> 'true'`, inArray(classMemberships.role, ["homeroom_teacher", "teacher"]))).limit(1)
@@ -147,7 +147,7 @@ export async function completeTeacherOnboarding(input: unknown, actorUserId: str
       .select({ organizationId: organizationMembers.organizationId, role: organizationMembers.role })
       .from(organizationMembers)
       .innerJoin(users, eq(users.id, organizationMembers.userId))
-      .where(and(eq(organizationMembers.userId, actorUserId), eq(users.status, "active")))
+      .where(and(eq(organizationMembers.userId, actorUserId), inArray(organizationMembers.role, ["admin", "teacher"]), eq(users.status, "active")))
       .limit(1);
 
     let organizationId = existingMembership?.organizationId;

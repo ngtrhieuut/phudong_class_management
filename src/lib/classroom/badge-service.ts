@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import { auditLogs, badgeDefinitions, classes, classMemberships, classStudents, studentBadges, students, users } from "@/db/schema";
 
 const writeRoles = ["homeroom_teacher", "teacher"] as const;
@@ -41,6 +42,7 @@ async function assertClassAccess(tx: Transaction, actorUserId: string, classId: 
         eq(classMemberships.classId, classId),
         inArray(classMemberships.role, writeRoles),
         eq(users.status, "active"),
+        operationalClassCondition(),
       ),
     )
     .limit(1);
@@ -108,8 +110,6 @@ export async function awardBadge(input: unknown, actorUserId: string) {
         classId: parsed.data.classId,
         studentId: parsed.data.studentId,
         badgeId: badge.id,
-        badgeName: badge.name,
-        reason: parsed.data.reason || null,
       },
     });
 

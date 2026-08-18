@@ -22,6 +22,7 @@ import {
   users,
 } from "@/db/schema";
 import { getGuardianStudents } from "@/lib/classroom/queries";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import { getParentPraisePosts } from "@/lib/praise/queries";
 import { getVietnamDayRange } from "@/lib/time/vietnam";
 
@@ -83,6 +84,7 @@ export async function getParentChildData(userId: string, studentId: string) {
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
         eq(students.organizationId, classes.organizationId),
+        operationalClassCondition(),
       ),
     )
     .orderBy(desc(schoolYears.active), asc(classes.name))

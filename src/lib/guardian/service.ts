@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import {
   auditLogs,
   classes,
@@ -62,6 +63,7 @@ async function getWritableClass(
         eq(classMemberships.classId, classId),
         inArray(classMemberships.role, writeRoles),
         eq(users.status, "active"),
+        operationalClassCondition(),
       ),
     )
     .limit(1);

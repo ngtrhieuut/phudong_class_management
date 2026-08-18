@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { notifyClassStaff } from "@/lib/teacher/notification-service";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import {
   auditLogs,
   classes,
@@ -68,7 +69,7 @@ export async function createClassTask(input: unknown, actorUserId: string) {
   const parsed = taskInputSchema.safeParse(input);
   if (!parsed.success || new Set(parsed.data.studentIds).size !== parsed.data.studentIds.length) throw new TaskServiceError("INVALID_INPUT", "Dữ liệu nhiệm vụ không hợp lệ.");
   return db.transaction(async (tx) => {
-    const [access] = await tx.select({ organizationId: classes.organizationId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).innerJoin(classes, eq(classes.id, classMemberships.classId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, parsed.data.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"))).limit(1);
+    const [access] = await tx.select({ organizationId: classes.organizationId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).innerJoin(classes, eq(classes.id, classMemberships.classId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, parsed.data.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"), operationalClassCondition())).limit(1);
     if (!access) throw new TaskServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền tạo nhiệm vụ cho lớp này.");
     if (parsed.data.studentIds.length > 0) {
       const members = await tx.select({ studentId: classStudents.studentId }).from(classStudents).innerJoin(students, eq(students.id, classStudents.studentId)).where(and(eq(classStudents.classId, parsed.data.classId), inArray(classStudents.studentId, parsed.data.studentIds), isNull(classStudents.leftAt), eq(students.status, "active"), eq(students.organizationId, access.organizationId)));
@@ -88,7 +89,7 @@ export async function approveTaskAssignment(taskId: string, studentId: string, a
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:task:${taskId}:${studentId}`}, 0))`);
     const [assignment] = await tx.select({ assignmentId: taskAssignments.id, taskId: tasks.id, classId: tasks.classId, rewardStars: tasks.rewardStars, organizationId: classes.organizationId, currentStatus: taskAssignments.status }).from(taskAssignments).innerJoin(tasks, eq(tasks.id, taskAssignments.taskId)).innerJoin(classes, eq(classes.id, tasks.classId)).innerJoin(students, eq(students.id, taskAssignments.studentId)).where(and(eq(taskAssignments.taskId, taskId), eq(taskAssignments.studentId, studentId), eq(students.organizationId, classes.organizationId))).limit(1);
     if (!assignment) throw new TaskServiceError("NOT_FOUND", "Không tìm thấy nhiệm vụ của học sinh.");
-    const [access] = await tx.select({ userId: classMemberships.userId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, assignment.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"))).limit(1);
+    const [access] = await tx.select({ userId: classMemberships.userId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).innerJoin(classes, eq(classes.id, classMemberships.classId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, assignment.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"), operationalClassCondition())).limit(1);
     if (!access) throw new TaskServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền duyệt nhiệm vụ này.");
     if (assignment.currentStatus === "completed") return { assignmentId: assignment.assignmentId, alreadyCompleted: true };
     if (assignment.currentStatus !== "pending") {

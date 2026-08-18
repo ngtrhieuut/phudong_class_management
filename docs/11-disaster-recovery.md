@@ -9,7 +9,7 @@
 
 ## Trước mỗi migration
 
-1. Kiểm tra `git status`, migration journal và `npm run db:check`.
+1. Kiểm tra `git status`, migration journal, `npm run db:check` và `npm run db:verify` bằng runtime/recovery connection phù hợp.
 2. Tạo Neon branch từ main làm rehearsal; chạy migration trên branch đó bằng connection string riêng.
 3. Chạy `npm run typecheck`, unit/integration tests, `npm run build`, sau đó smoke-test health/auth/teacher/parent/admin.
 4. Ghi lại branch ID, migration file, schema diff và query kiểm tra invariants.

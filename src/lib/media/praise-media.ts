@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { z } from "zod";
 
 import { db } from "@/db";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import {
   auditLogs,
   classes,
@@ -237,6 +238,7 @@ export async function getWritablePraisePostAccess(userId: string, postId: string
         eq(classMemberships.userId, userId),
         inArray(classMemberships.role, teacherRoles),
         eq(users.status, "active"),
+        operationalClassCondition(),
       ),
     )
     .limit(1);
@@ -339,7 +341,8 @@ async function canTeacherViewMedia(userId: string, classId: string) {
     .select({ id: classMemberships.id })
     .from(classMemberships)
     .innerJoin(users, eq(users.id, classMemberships.userId))
-    .where(and(eq(classMemberships.userId, userId), eq(classMemberships.classId, classId), inArray(classMemberships.role, ["homeroom_teacher", "teacher", "assistant"]), eq(users.status, "active")))
+    .innerJoin(classes, eq(classes.id, classMemberships.classId))
+    .where(and(eq(classMemberships.userId, userId), eq(classMemberships.classId, classId), inArray(classMemberships.role, ["homeroom_teacher", "teacher", "assistant"]), eq(users.status, "active"), operationalClassCondition()))
     .limit(1);
   return Boolean(access);
 }
@@ -349,12 +352,14 @@ async function canTeacherManageMedia(userId: string, classId: string) {
     .select({ id: classMemberships.id })
     .from(classMemberships)
     .innerJoin(users, eq(users.id, classMemberships.userId))
+    .innerJoin(classes, eq(classes.id, classMemberships.classId))
     .where(
       and(
         eq(classMemberships.userId, userId),
         eq(classMemberships.classId, classId),
         inArray(classMemberships.role, mediaWriteRoles),
         eq(users.status, "active"),
+        operationalClassCondition(),
       ),
     )
     .limit(1);

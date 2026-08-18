@@ -22,6 +22,7 @@ Branch rehearsal `br-empty-scene-afpgv9al` đã được dùng để kiểm tra 
 ## Controls đang hoạt động trước RLS
 
 - Teacher/admin/guardian access đều được kiểm tra server-side theo class/organization/student relation.
+- Teacher/guardian read-write flows còn kiểm tra lớp thuộc school year active và chưa có cờ `settingsJson.archived`, nên stale client không thể tiếp tục thao tác lớp đã lưu trữ.
 - Mutation routes dùng authenticated session, same-origin check cho mutation và `Cache-Control: no-store`.
 - Score/reward dùng transaction, advisory lock, guarded balance update và audit/idempotency.
 - Import mặc định tạo guardian relation `canView=false` cho đến khi được teacher link/invite.

@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import { calculateScoreDelta } from "@/lib/scoring";
 import { getVietnamDayRange } from "@/lib/time/vietnam";
+import { operationalClassCondition } from "@/lib/classroom/access";
 
 const scoreBatchInputSchema = z.object({
   classId: z.string().uuid(),
@@ -115,6 +116,7 @@ export async function recordBehaviorScoreBatch(
             eq(classMemberships.classId, parsed.data.classId),
             inArray(classMemberships.role, ["homeroom_teacher", "teacher"]),
             eq(users.status, "active"),
+            operationalClassCondition(),
           ),
         )
         .limit(1);
@@ -319,6 +321,7 @@ export async function recordScoreAdjustment(
             eq(classMemberships.classId, parsed.data.classId),
             inArray(classMemberships.role, ["homeroom_teacher", "teacher"]),
             eq(users.status, "active"),
+            operationalClassCondition(),
           ),
         )
         .limit(1);

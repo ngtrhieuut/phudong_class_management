@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 
 import { db } from "@/db";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import { getVietnamDayRange } from "@/lib/time/vietnam";
 import {
   behaviorTemplates,
@@ -349,6 +350,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
         eq(students.organizationId, classes.organizationId),
+        operationalClassCondition(),
       ),
     )
     .limit(1);
@@ -637,6 +639,7 @@ export async function getGuardianStudents(userId: string) {
         isNull(classStudents.leftAt),
         eq(students.status, "active"),
         eq(students.organizationId, classes.organizationId),
+        operationalClassCondition(),
       ),
     )
     .orderBy(asc(students.fullName));

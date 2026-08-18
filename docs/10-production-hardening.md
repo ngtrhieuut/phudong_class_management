@@ -44,10 +44,16 @@ Cho đến khi approval và test này hoàn tất, báo cáo phải ghi rõ: **R
 
 ## Authenticated integration gate
 
-`tests/e2e/authenticated-security.spec.ts` kiểm tra teacher/guardian/admin boundary và retry idempotency cho score/reward. CI chỉ chạy suite này khi repository variable `ENABLE_AUTH_E2E=true` và toàn bộ fixture secrets `E2E_*` cùng connection/auth secrets đã được cấu hình. Khi chưa có fixture riêng, CI phát notice và không được diễn giải thành kết quả authenticated PASS.
+`tests/e2e/authenticated-security.spec.ts` kiểm tra qua HTTP/API teacher cross-class, guardian child/media isolation, admin tenant scope, invitation valid/wrong-email/expired/revoked/replay/concurrency và score/reward atomicity. CI chỉ chạy suite này khi repository variable `ENABLE_AUTH_E2E=true` và toàn bộ fixture secrets `E2E_*` cùng connection/auth secrets đã được cấu hình. Khi chưa có fixture riêng, CI phát notice và không được diễn giải thành kết quả authenticated PASS.
 
-Fixture phải là tài khoản/test data riêng, không dùng tài khoản giáo viên hoặc dữ liệu học sinh production. Sau mỗi lần chạy cần kiểm tra cleanup/idempotency key và giữ lại trace khi test retry thất bại.
+Fixture phải là tài khoản/test data riêng, không dùng tài khoản giáo viên hoặc dữ liệu học sinh production. Bộ fixture đầy đủ gồm hai class/teacher scope, child được phép và child ngoài scope, media ngoài scope, revoked/canView=false guardian, foreign organization, các invitation token theo từng trạng thái, và balance-limited reward fixtures. Sau mỗi lần chạy cần kiểm tra cleanup/idempotency key và giữ lại trace khi test retry thất bại.
+
+`npm run db:verify` là schema-contract check read-only đối với Neon connection được chọn. CI chỉ chạy live check khi repository variable `ENABLE_DB_VERIFY=true`; khi bật phải cung cấp runtime connection riêng qua `DATABASE_URL_RUNTIME`, không dùng migration/owner URL làm application verification role.
 
 ## Audit log privacy
 
-Audit chỉ lưu identifiers, action, counters và fingerprint cần cho idempotency. Không lưu token thô, URL media, nội dung note, hoặc email guardian trong `afterJson` mới. Các log cũ cần retention/cleanup theo [12-privacy-retention-media.md](./12-privacy-retention-media.md).
+Audit chỉ lưu identifiers, action, counters và fingerprint cần cho idempotency. Không lưu token thô, URL media, nội dung note, guardian email (kể cả hash), hoặc full name học sinh trong `afterJson` mới. Các log cũ cần retention/cleanup theo [12-privacy-retention-media.md](./12-privacy-retention-media.md).
+
+## Dependency audit limitation
+
+`npm audit --omit=dev --audit-level=high` pass ở ngưỡng high. Audit vẫn báo 7 moderate transitive advisories đi qua `@neondatabase/auth` beta/better-auth/drizzle-kit/esbuild; `npm audit fix --force` có thể kéo `drizzle-kit` về breaking version nên chưa tự động áp dụng. Cần theo dõi bản phát hành upstream và review/pin dependency trong một maintenance change riêng.

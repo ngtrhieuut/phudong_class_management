@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { notifyClassStaff } from "@/lib/teacher/notification-service";
+import { operationalClassCondition } from "@/lib/classroom/access";
 import { auditLogs, classes, classMemberships, classStudents, rewardRedemptions, rewards, scoreTransactions, studentScoreSnapshots, students, users } from "@/db/schema";
 
 const writeRoles = ["homeroom_teacher", "teacher"] as const;
@@ -42,7 +43,7 @@ export async function redeemReward(input: unknown, actorUserId: string, idempote
   if (!idempotencyKey.trim() || idempotencyKey.length > 128) throw new RewardServiceError("INVALID_INPUT", "Thiếu mã idempotency cho thao tác đổi quà.");
   const fingerprint = createHash("sha256").update(JSON.stringify({ actorUserId, ...parsed.data })).digest("hex");
   return db.transaction(async (tx) => {
-    const [access] = await tx.select({ organizationId: classes.organizationId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).innerJoin(classes, eq(classes.id, classMemberships.classId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, parsed.data.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"))).limit(1);
+    const [access] = await tx.select({ organizationId: classes.organizationId }).from(classMemberships).innerJoin(users, eq(users.id, classMemberships.userId)).innerJoin(classes, eq(classes.id, classMemberships.classId)).where(and(eq(classMemberships.userId, actorUserId), eq(classMemberships.classId, parsed.data.classId), inArray(classMemberships.role, writeRoles), eq(users.status, "active"), operationalClassCondition())).limit(1);
     if (!access) throw new RewardServiceError("FORBIDDEN_CLASS_ACCESS", "Bạn không có quyền đổi quà cho lớp này.");
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`phudong:reward-idempotency:${access.organizationId}:${idempotencyKey}`}, 0))`);
     const [previousAudit] = await tx.select({ afterJson: auditLogs.afterJson }).from(auditLogs).where(and(eq(auditLogs.organizationId, access.organizationId), eq(auditLogs.entityType, "reward_redemption_idempotency"), eq(auditLogs.entityId, idempotencyKey), eq(auditLogs.action, "created"))).limit(1);
@@ -105,12 +106,14 @@ export async function transitionRewardRedemption(redemptionId: string, input: un
       .select({ userId: classMemberships.userId })
       .from(classMemberships)
       .innerJoin(users, eq(users.id, classMemberships.userId))
+      .innerJoin(classes, eq(classes.id, classMemberships.classId))
       .where(
         and(
           eq(classMemberships.userId, actorUserId),
           eq(classMemberships.classId, redemption.classId),
           inArray(classMemberships.role, writeRoles),
           eq(users.status, "active"),
+          operationalClassCondition(),
         ),
       )
       .limit(1);

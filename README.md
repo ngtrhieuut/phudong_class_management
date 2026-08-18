@@ -28,6 +28,10 @@ Codex phải sử dụng **Neon MCP, GitHub Connector và Vercel Connector** đ�
 - `docs/07-security-privacy.md` — Bảo mật, quyền riêng tư và dữ liệu học sinh.
 - `docs/08-implementation-guide.md` — Kiến trúc kỹ thuật Neon/Vercel và cách triển khai.
 - `docs/09-codex-mcp-workflow.md` — Quy trình Codex dùng Neon MCP + GitHub + Vercel Connector.
+- `docs/10-production-hardening.md` — baseline security, RLS strategy và authenticated test gate.
+- `docs/11-disaster-recovery.md` — migration, backup và recovery workflow.
+- `docs/12-privacy-retention-media.md` — phân loại, retention và media handling.
+- `docs/security-e2e-fixtures.md` — fixture isolation và gate cho authenticated security E2E.
 - `AGENTS.md` — Luật bắt buộc cho Codex/AI coding agent khi phát triển repo.
 - `.env.example` — template environment variables, không chứa secret.
 - `assets/reference/class-management-concept.jpg` — ảnh concept tham chiếu đã tối ưu dung lượng.
