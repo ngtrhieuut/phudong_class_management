@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { del, get, put } from "@vercel/blob";
 import { aliasedTable } from "drizzle-orm/alias";
-import { and, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notExists, sql } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
 
@@ -371,13 +371,29 @@ async function getMediaTarget(mediaId: string) {
   return target ?? null;
 }
 
-async function canTeacherViewMedia(userId: string, classId: string) {
+async function canTeacherViewMedia(userId: string, classId: string, postId: string) {
+  const inactivePostStudents = aliasedTable(students, "inactive_teacher_praise_post_students");
   const [access] = await db
     .select({ id: classMemberships.id })
     .from(classMemberships)
     .innerJoin(users, eq(users.id, classMemberships.userId))
     .innerJoin(classes, eq(classes.id, classMemberships.classId))
-    .where(and(eq(classMemberships.userId, userId), eq(classMemberships.classId, classId), inArray(classMemberships.role, ["homeroom_teacher", "teacher", "assistant"]), eq(users.status, "active"), operationalClassCondition()))
+    .where(
+      and(
+        eq(classMemberships.userId, userId),
+        eq(classMemberships.classId, classId),
+        inArray(classMemberships.role, ["homeroom_teacher", "teacher", "assistant"]),
+        eq(users.status, "active"),
+        operationalClassCondition(),
+        notExists(
+          db
+            .select({ id: praisePostStudents.id })
+            .from(praisePostStudents)
+            .innerJoin(inactivePostStudents, eq(inactivePostStudents.id, praisePostStudents.studentId))
+            .where(and(eq(praisePostStudents.postId, postId), ne(inactivePostStudents.status, "active"))),
+        ),
+      ),
+    )
     .limit(1);
   return Boolean(access);
 }
@@ -459,7 +475,7 @@ export async function getAccessiblePraiseMedia(mediaId: string, userId: string) 
   // pipeline. DELETE remains available to authorized admins/teachers so old
   // assets can be removed without ever being streamed.
   if (target.mimeType !== "image/webp") return null;
-  if (await canTeacherViewMedia(userId, target.classId)) return target;
+  if (await canTeacherViewMedia(userId, target.classId, target.postId)) return target;
   // Admins retain organization-scoped access for retention and deletion
   // operations, including archived classes. Guardian access remains limited
   // to the active teaching flow below.
