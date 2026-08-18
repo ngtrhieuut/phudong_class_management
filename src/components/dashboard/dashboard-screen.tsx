@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CalendarCheck,
@@ -18,6 +18,7 @@ import {
 import { StudentCard } from "@/components/dashboard/student-card";
 import { AvatarImage } from "@/components/ui/avatar-template-picker";
 import type { DemoActivity, DemoBehavior, DemoPraise, DemoStudent } from "@/lib/demo-data";
+import { applyStudentAvatarUpdates } from "@/lib/client/student-avatar-store";
 
 const activityIcons = {
   star: Star,
@@ -65,13 +66,33 @@ export function DashboardScreen({
   initialScoreStudentId?: string;
 }) {
   const router = useRouter();
-  const students = initialStudents;
+  const [students, setStudents] = useState<DemoStudent[]>(initialStudents);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [isScoreOpen, setIsScoreOpen] = useState(false);
   const [selectedBehaviorId, setSelectedBehaviorId] = useState(behaviors[0]?.id ?? "");
   const [toast, setToast] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const initialScoreOpened = useRef(false);
+
+  useEffect(() => {
+    startTransition(() => {
+      setStudents(applyStudentAvatarUpdates(initialStudents));
+    });
+  }, [initialStudents]);
+
+  useEffect(() => {
+    function handleAvatarChanged(event: Event) {
+      const detail = (event as CustomEvent<{ studentId?: string; url?: string }>).detail;
+      if (!detail?.studentId || typeof detail.url !== "string") return;
+
+      setStudents((current) => current.map((student) => (
+        student.id === detail.studentId ? { ...student, avatarUrl: detail.url } : student
+      )));
+    }
+
+    window.addEventListener("phudong:student-avatar-changed", handleAvatarChanged);
+    return () => window.removeEventListener("phudong:student-avatar-changed", handleAvatarChanged);
+  }, []);
 
   const selectedStudents = useMemo(
     () => students.filter((student) => selectedStudentIds.includes(student.id)),

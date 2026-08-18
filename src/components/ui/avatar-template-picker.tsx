@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { avatarPresets, type AvatarGender } from "@/lib/avatar-presets";
+import { rememberStudentAvatar } from "@/lib/client/student-avatar-store";
 
 export function AvatarImage({
   src,
@@ -233,6 +234,7 @@ function StudentAvatarPickerState({
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     if (!response.ok) throw new Error(payload?.error || "Không thể đổi avatar.");
     setAvatarUrl(url);
+    rememberStudentAvatar(studentId, url);
     window.dispatchEvent(new CustomEvent("phudong:student-avatar-changed", { detail: { studentId, url } }));
     onChanged?.(url);
     router.refresh();

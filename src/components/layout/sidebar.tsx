@@ -42,6 +42,7 @@ export function Sidebar({ active, teacherName = "Tài khoản", teacherAvatarUrl
             <Link
               key={href}
               href={href}
+              prefetch={false}
               className={"flex min-h-12 items-center gap-3 rounded-2xl px-4 font-heading text-sm font-bold transition " + (selected ? "bg-[var(--primary-container)] text-white shadow-md shadow-blue-900/10" : "text-[var(--on-surface-variant)] hover:bg-[var(--surface-container)] hover:text-[var(--primary)]")}
             >
               <Icon size={22} weight={selected ? "fill" : "regular"} />

@@ -21,6 +21,7 @@ export function MobileNav({ active }: { active: string }) {
             <Link
               key={href}
               href={href}
+              prefetch={false}
               aria-label={label}
               className="flex min-h-12 min-w-14 -translate-y-3 flex-col items-center justify-center gap-0.5 rounded-full bg-[var(--primary)] px-3 text-white shadow-lg shadow-blue-900/20 transition active:scale-95"
             >
@@ -33,6 +34,7 @@ export function MobileNav({ active }: { active: string }) {
           <Link
             key={href}
             href={href}
+            prefetch={false}
             className={"flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 transition " + (selected ? "text-[var(--primary)]" : "text-[var(--on-surface-variant)]")}
           >
             <Icon size={21} weight={selected ? "fill" : "regular"} />
