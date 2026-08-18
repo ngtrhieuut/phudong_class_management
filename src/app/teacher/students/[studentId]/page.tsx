@@ -18,12 +18,13 @@ function formatPeriod(period: string, type: "week" | "month") {
     : new Date(`${period}T00:00:00`).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
 }
 
-export default async function StudentDetailPage({ params }: { params: Promise<{ studentId: string }> }) {
+export default async function StudentDetailPage({ params, searchParams }: { params: Promise<{ studentId: string }>; searchParams: Promise<{ classId?: string }> }) {
   const session = await requireUserSession();
   const appUser = await ensureAppUser({ id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image });
   const { studentId } = await params;
+  const { classId } = await searchParams;
   const [studentData, classOptions] = await Promise.all([
-    getTeacherStudentProfile(session.user.id, studentId),
+    getTeacherStudentProfile(session.user.id, studentId, classId),
     getTeacherClasses(session.user.id),
   ]);
 

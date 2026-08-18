@@ -18,7 +18,7 @@ import {
 import { StudentCard } from "@/components/dashboard/student-card";
 import { AvatarImage } from "@/components/ui/avatar-template-picker";
 import type { DemoActivity, DemoBehavior, DemoPraise, DemoStudent } from "@/lib/demo-data";
-import { applyStudentAvatarUpdates } from "@/lib/client/student-avatar-store";
+import { applyStudentAvatarSnapshots, applyStudentAvatarUpdates } from "@/lib/client/student-avatar-store";
 import { fetchStudentAvatarSnapshots } from "@/lib/client/student-avatar-sync";
 
 const activityIcons = {
@@ -39,6 +39,10 @@ const behaviorToneClasses = {
   blue: "bg-[#d4e3ff] text-[#005da7]",
   green: "bg-[#c9f5e5] text-[#136b54]",
 };
+
+function classScopedHref(href: string, classId: string) {
+  return `${href}${href.includes("?") ? "&" : "?"}classId=${encodeURIComponent(classId)}`;
+}
 
 export function DashboardScreen({
   teacherName,
@@ -74,6 +78,7 @@ export function DashboardScreen({
   const [toast, setToast] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const initialScoreOpened = useRef(false);
+  const avatarSyncVersion = useRef(0);
 
   useEffect(() => {
     startTransition(() => {
@@ -85,12 +90,10 @@ export function DashboardScreen({
     const controller = new AbortController();
 
     async function syncFromDatabase() {
+      const requestVersion = ++avatarSyncVersion.current;
       const snapshots = await fetchStudentAvatarSnapshots(classId, controller.signal).catch(() => null);
-      if (!snapshots || controller.signal.aborted) return;
-      const avatarsByStudent = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot.avatarUrl]));
-      setStudents((current) => applyStudentAvatarUpdates(current.map((student) => (
-        avatarsByStudent.has(student.id) ? { ...student, avatarUrl: avatarsByStudent.get(student.id) ?? null } : student
-      ))));
+      if (!snapshots || controller.signal.aborted || requestVersion !== avatarSyncVersion.current) return;
+      setStudents((current) => applyStudentAvatarSnapshots(current, snapshots));
     }
 
     void syncFromDatabase();
@@ -99,12 +102,15 @@ export function DashboardScreen({
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pageshow", syncFromDatabase);
+    window.addEventListener("focus", syncFromDatabase);
     return () => {
+      avatarSyncVersion.current += 1;
       controller.abort();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pageshow", syncFromDatabase);
+      window.removeEventListener("focus", syncFromDatabase);
     };
-  }, [classId]);
+  }, [classId, initialStudents]);
 
   useEffect(() => {
     function handleAvatarChanged(event: Event) {
@@ -217,7 +223,7 @@ export function DashboardScreen({
               Đây là những gì đang diễn ra ở {className}.
             </p>
           </div>
-          <Link href="/teacher/students" className="inline-flex min-h-12 items-center justify-center gap-2 self-start rounded-full bg-[var(--secondary-container)] px-5 font-heading text-sm font-bold text-[var(--secondary)] shadow-md shadow-yellow-900/10 transition hover:bg-[#ffe16d] active:scale-[0.98] sm:self-auto">
+          <Link href={classScopedHref("/teacher/students", classId)} className="inline-flex min-h-12 items-center justify-center gap-2 self-start rounded-full bg-[var(--secondary-container)] px-5 font-heading text-sm font-bold text-[var(--secondary)] shadow-md shadow-yellow-900/10 transition hover:bg-[#ffe16d] active:scale-[0.98] sm:self-auto">
             <CalendarCheck size={20} weight="bold" /> Mở danh sách hôm nay
           </Link>
         </div>
@@ -276,7 +282,7 @@ export function DashboardScreen({
           <section aria-labelledby="activity-heading">
             <div className="mb-4 flex items-center justify-between">
               <h2 id="activity-heading" className="font-heading text-2xl font-bold text-[var(--on-surface)]">Hoạt động gần đây</h2>
-              <Link href={`/teacher/analytics?classId=${classId}`} className="font-heading text-sm font-bold text-[var(--primary)] transition hover:underline">Xem tất cả</Link>
+              <Link href={classScopedHref("/teacher/analytics", classId)} className="font-heading text-sm font-bold text-[var(--primary)] transition hover:underline">Xem tất cả</Link>
             </div>
             <div className="overflow-hidden rounded-[1.5rem] bg-[var(--surface-lowest)] soft-shadow">
               {activities.length > 0 ? activities.map((activity) => {
@@ -304,7 +310,7 @@ export function DashboardScreen({
               <h2 id="praise-heading" className="flex items-center gap-2 font-heading text-2xl font-bold text-[var(--primary)]">
                 <Sparkle size={24} weight="fill" /> Tuyên dương nhanh
               </h2>
-              <Link href={`/teacher/praise?classId=${classId}`} aria-label="Tạo bài tuyên dương" className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-lowest)] text-[var(--primary)] shadow-sm transition hover:bg-white active:scale-95">
+              <Link href={classScopedHref("/teacher/praise", classId)} aria-label="Tạo bài tuyên dương" className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-lowest)] text-[var(--primary)] shadow-sm transition hover:bg-white active:scale-95">
                 <Plus size={21} weight="bold" />
               </Link>
             </div>
@@ -333,7 +339,7 @@ export function DashboardScreen({
               <h2 id="students-heading" className="font-heading text-2xl font-bold text-[var(--on-surface)]">Học sinh trong lớp</h2>
               <p className="mt-1 font-body text-sm text-[var(--on-surface-variant)]">Chạm vào nút cộng để ghi nhận nhanh, hoặc mở hồ sơ để xem chi tiết.</p>
             </div>
-            <Link href="/teacher/students" className="inline-flex items-center gap-1 font-heading text-sm font-bold text-[var(--primary)] hover:underline">
+            <Link href={classScopedHref("/teacher/students", classId)} className="inline-flex items-center gap-1 font-heading text-sm font-bold text-[var(--primary)] hover:underline">
               Quản lý danh sách <ArrowRight size={17} weight="bold" />
             </Link>
           </div>
@@ -345,7 +351,7 @@ export function DashboardScreen({
                 classId={classId}
                 onScore={(studentId) => openScore([studentId])}
                 onOpen={(studentId) => {
-                  router.push("/teacher/students/" + studentId);
+                  router.push(`/teacher/students/${studentId}?classId=${encodeURIComponent(classId)}`);
                 }}
               />
             ))}

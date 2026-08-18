@@ -20,7 +20,12 @@ function initials(name: string) {
   return `${parts[0][0]}${parts.at(-1)?.[0] ?? ""}`.toUpperCase();
 }
 
-export function Sidebar({ active, teacherName = "Tài khoản", teacherAvatarUrl, className = "Chưa chọn lớp", schoolYearName = "Chưa thiết lập năm học" }: { active: string; teacherName?: string; teacherAvatarUrl?: string | null; className?: string; schoolYearName?: string }) {
+function classScopedHref(href: string, selectedClassId?: string) {
+  if (!selectedClassId || href.includes("classId=")) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}classId=${encodeURIComponent(selectedClassId)}`;
+}
+
+export function Sidebar({ active, teacherName = "Tài khoản", teacherAvatarUrl, selectedClassId, className = "Chưa chọn lớp", schoolYearName = "Chưa thiết lập năm học" }: { active: string; teacherName?: string; teacherAvatarUrl?: string | null; selectedClassId?: string; className?: string; schoolYearName?: string }) {
   return (
     <aside className="hidden w-64 shrink-0 flex-col rounded-r-[2rem] bg-[var(--surface-low)] md:flex">
       <div className="border-b border-[var(--surface-high)] p-6">
@@ -41,7 +46,7 @@ export function Sidebar({ active, teacherName = "Tài khoản", teacherAvatarUrl
           return (
             <Link
               key={href}
-              href={href}
+              href={classScopedHref(href, selectedClassId)}
               prefetch={false}
               className={"flex min-h-12 items-center gap-3 rounded-2xl px-4 font-heading text-sm font-bold transition " + (selected ? "bg-[var(--primary-container)] text-white shadow-md shadow-blue-900/10" : "text-[var(--on-surface-variant)] hover:bg-[var(--surface-container)] hover:text-[var(--primary)]")}
             >

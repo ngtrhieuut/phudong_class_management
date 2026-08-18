@@ -11,7 +11,12 @@ const items = [
   { href: "/teacher/settings", label: "Cài đặt", Icon: Gear },
 ];
 
-export function MobileNav({ active }: { active: string }) {
+function classScopedHref(href: string, selectedClassId?: string) {
+  if (!selectedClassId || href.includes("classId=")) return href;
+  return `${href}${href.includes("?") ? "&" : "?"}classId=${encodeURIComponent(selectedClassId)}`;
+}
+
+export function MobileNav({ active, selectedClassId }: { active: string; selectedClassId?: string }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-[76px] items-center justify-around border-t border-[var(--surface-high)] bg-[var(--surface-lowest)]/95 px-2 pb-2 shadow-[0_-4px_16px_rgb(0_93_167_/_0.08)] backdrop-blur md:hidden">
       {items.map(({ href, label, Icon, primary }) => {
@@ -20,7 +25,7 @@ export function MobileNav({ active }: { active: string }) {
           return (
             <Link
               key={href}
-              href={href}
+              href={classScopedHref(href, selectedClassId)}
               prefetch={false}
               aria-label={label}
               className="flex min-h-12 min-w-14 -translate-y-3 flex-col items-center justify-center gap-0.5 rounded-full bg-[var(--primary)] px-3 text-white shadow-lg shadow-blue-900/20 transition active:scale-95"
@@ -33,7 +38,7 @@ export function MobileNav({ active }: { active: string }) {
         return (
           <Link
             key={href}
-            href={href}
+            href={classScopedHref(href, selectedClassId)}
             prefetch={false}
             className={"flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 transition " + (selected ? "text-[var(--primary)]" : "text-[var(--on-surface-variant)]")}
           >

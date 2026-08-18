@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Cards, ListBullets, MagnifyingGlass, Rows, SlidersHorizontal, UsersThree } from "@phosphor-icons/react";
 
 import { StudentAvatarPicker } from "@/components/ui/avatar-template-picker";
 import { StudentCard } from "@/components/dashboard/student-card";
 import type { DemoStudent } from "@/lib/demo-data";
-import { applyStudentAvatarUpdates } from "@/lib/client/student-avatar-store";
+import { applyStudentAvatarSnapshots, applyStudentAvatarUpdates } from "@/lib/client/student-avatar-store";
 import { fetchStudentAvatarSnapshots } from "@/lib/client/student-avatar-sync";
 
 type ViewMode = "cards" | "list" | "detail";
@@ -28,6 +28,10 @@ function formatBirthDate(value: string | null | undefined) {
 
 function initials(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).slice(-2).map((part) => part[0]).join("").toUpperCase() || "?";
+}
+
+function studentDetailHref(studentId: string, classId?: string) {
+  return `/teacher/students/${studentId}${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`;
 }
 
 export function StudentsScreen({
@@ -54,6 +58,7 @@ export function StudentsScreen({
   const [level, setLevel] = useState("Tất cả level");
   const [taskStatus, setTaskStatus] = useState("Tất cả trạng thái");
   const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const avatarSyncVersion = useRef(0);
   useEffect(() => {
     startTransition(() => setStudents(applyStudentAvatarUpdates(initialStudents)));
   }, [initialStudents]);
@@ -64,12 +69,10 @@ export function StudentsScreen({
     const controller = new AbortController();
 
     async function syncFromDatabase() {
+      const requestVersion = ++avatarSyncVersion.current;
       const snapshots = await fetchStudentAvatarSnapshots(activeClassId, controller.signal).catch(() => null);
-      if (!snapshots || controller.signal.aborted) return;
-      const avatarsByStudent = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot.avatarUrl]));
-      setStudents((current) => applyStudentAvatarUpdates(current.map((student) => (
-        avatarsByStudent.has(student.id) ? { ...student, avatarUrl: avatarsByStudent.get(student.id) ?? null } : student
-      ))));
+      if (!snapshots || controller.signal.aborted || requestVersion !== avatarSyncVersion.current) return;
+      setStudents((current) => applyStudentAvatarSnapshots(current, snapshots));
     }
 
     void syncFromDatabase();
@@ -78,12 +81,15 @@ export function StudentsScreen({
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pageshow", syncFromDatabase);
+    window.addEventListener("focus", syncFromDatabase);
     return () => {
+      avatarSyncVersion.current += 1;
       controller.abort();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pageshow", syncFromDatabase);
+      window.removeEventListener("focus", syncFromDatabase);
     };
-  }, [classId]);
+  }, [classId, initialStudents]);
 
   useEffect(() => {
     function handleAvatarChanged(event: Event) {
@@ -171,11 +177,11 @@ export function StudentsScreen({
 
       {filteredStudents.length > 0 ? (
         viewMode === "cards" ? (
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{filteredStudents.map((student) => <StudentCard key={student.id} student={student} classId={classId ?? null} onScore={openScore} onOpen={(studentId) => router.push("/teacher/students/" + studentId)} />)}</div>
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{filteredStudents.map((student) => <StudentCard key={student.id} student={student} classId={classId ?? null} onScore={openScore} onOpen={(studentId) => router.push(studentDetailHref(studentId, classId))} />)}</div>
         ) : viewMode === "list" ? (
-          <div className="mt-8 space-y-3">{filteredStudents.map((student) => <article key={student.id} className="soft-shadow-hover flex flex-col gap-4 rounded-3xl border border-transparent bg-[var(--surface-lowest)] p-4 soft-shadow sm:flex-row sm:items-center"><div className="flex min-w-0 flex-1 items-center gap-3">{classId ? <StudentAvatarPicker classId={classId} studentId={student.id} value={student.avatarUrl} gender={student.gender === "male" || student.gender === "female" ? student.gender : null} fallback={<span className="flex h-16 w-16 items-center justify-center rounded-[1.25rem] bg-[var(--primary-fixed)] font-heading text-lg font-bold text-[var(--primary)]">{student.shortName}</span>} /> : <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">{student.shortName}</span>}<div className="min-w-0"><Link href={`/teacher/students/${student.id}`} className="truncate font-heading text-lg font-bold text-[var(--on-surface)] transition hover:text-[var(--primary)] hover:underline">{student.name}</Link><p className="mt-1 truncate font-body text-sm text-[var(--on-surface-variant)]">{student.studentCode} · {student.group}{student.classRole ? ` · ${student.classRole}` : ""}</p><p className="mt-1 truncate font-body text-xs text-[var(--outline)]">PH: {student.guardians?.map((guardian) => guardian.fullName).join(" · ") || "Chưa cập nhật"}</p></div></div><div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:items-center"><span className="rounded-full bg-[var(--secondary-container)]/40 px-3 py-2 font-heading text-xs font-bold text-[var(--secondary)]">★ {student.spendableStars} sao</span><span className="rounded-full bg-[var(--surface-low)] px-3 py-2 font-heading text-xs font-bold text-[var(--primary)]">{student.points} điểm</span><button type="button" onClick={() => openScore(student.id)} className="col-span-2 min-h-10 rounded-full bg-[var(--primary)] px-4 font-heading text-xs font-bold text-white transition hover:-translate-y-0.5 hover:bg-[var(--primary-container)] active:scale-95 sm:col-span-1">Cộng điểm</button></div></article>)}</div>
+          <div className="mt-8 space-y-3">{filteredStudents.map((student) => <article key={student.id} className="soft-shadow-hover flex flex-col gap-4 rounded-3xl border border-transparent bg-[var(--surface-lowest)] p-4 soft-shadow sm:flex-row sm:items-center"><div className="flex min-w-0 flex-1 items-center gap-3">{classId ? <StudentAvatarPicker classId={classId} studentId={student.id} value={student.avatarUrl} gender={student.gender === "male" || student.gender === "female" ? student.gender : null} fallback={<span className="flex h-16 w-16 items-center justify-center rounded-[1.25rem] bg-[var(--primary-fixed)] font-heading text-lg font-bold text-[var(--primary)]">{student.shortName}</span>} /> : <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">{student.shortName}</span>}<div className="min-w-0"><Link href={studentDetailHref(student.id, classId)} className="truncate font-heading text-lg font-bold text-[var(--on-surface)] transition hover:text-[var(--primary)] hover:underline">{student.name}</Link><p className="mt-1 truncate font-body text-sm text-[var(--on-surface-variant)]">{student.studentCode} · {student.group}{student.classRole ? ` · ${student.classRole}` : ""}</p><p className="mt-1 truncate font-body text-xs text-[var(--outline)]">PH: {student.guardians?.map((guardian) => guardian.fullName).join(" · ") || "Chưa cập nhật"}</p></div></div><div className="grid grid-cols-2 gap-2 text-sm sm:flex sm:items-center"><span className="rounded-full bg-[var(--secondary-container)]/40 px-3 py-2 font-heading text-xs font-bold text-[var(--secondary)]">★ {student.spendableStars} sao</span><span className="rounded-full bg-[var(--surface-low)] px-3 py-2 font-heading text-xs font-bold text-[var(--primary)]">{student.points} điểm</span><button type="button" onClick={() => openScore(student.id)} className="col-span-2 min-h-10 rounded-full bg-[var(--primary)] px-4 font-heading text-xs font-bold text-white transition hover:-translate-y-0.5 hover:bg-[var(--primary-container)] active:scale-95 sm:col-span-1">Cộng điểm</button></div></article>)}</div>
         ) : (
-          <div className="mt-8 overflow-x-auto rounded-3xl bg-[var(--surface-lowest)] soft-shadow"><table className="min-w-[900px] w-full text-left"><thead className="bg-[var(--surface-low)]"><tr>{["Học sinh", "Ngày sinh", "Giới tính", "Tổ / chức vụ", "Phụ huynh", "Tiến bộ", ""].map((heading) => <th key={heading} className="px-4 py-4 font-heading text-xs font-bold uppercase tracking-wide text-[var(--on-surface-variant)]">{heading}</th>)}</tr></thead><tbody>{filteredStudents.map((student) => <tr key={student.id} className="border-t border-[var(--surface-high)] transition hover:bg-[var(--surface-low)]"><td className="px-4 py-3"><div className="flex items-center gap-3">{classId ? <StudentAvatarPicker classId={classId} studentId={student.id} value={student.avatarUrl} gender={student.gender === "male" || student.gender === "female" ? student.gender : null} fallback={<span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">{initials(student.name)}</span>} /> : null}<div><Link href={`/teacher/students/${student.id}`} className="font-heading text-sm font-bold text-[var(--on-surface)] hover:text-[var(--primary)] hover:underline">{student.name}</Link><p className="mt-0.5 font-body text-xs text-[var(--outline)]">{student.studentCode}</p></div></div></td><td className="px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{formatBirthDate(student.birthDate)}</td><td className="px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{genderLabels[student.gender ?? "undisclosed"]}</td><td className="px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{student.group}<br /><span className="font-heading text-xs font-bold text-[var(--primary)]">{student.classRole || "Chưa phân chức vụ"}</span></td><td className="max-w-56 px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{student.guardians?.length ? student.guardians.map((guardian) => <span key={guardian.id} className="block truncate">{guardian.relationship}: {guardian.fullName}{guardian.phone ? ` · ${guardian.phone}` : ""}</span>) : "Chưa cập nhật"}</td><td className="px-4 py-3"><span className="font-heading text-sm font-bold text-[var(--primary)]">{student.points} điểm</span><span className="mt-1 block font-body text-xs text-[var(--on-surface-variant)]">Level {student.level}</span></td><td className="px-4 py-3"><button type="button" onClick={() => openScore(student.id)} className="min-h-10 rounded-full bg-[var(--primary)] px-4 font-heading text-xs font-bold text-white transition hover:bg-[var(--primary-container)] active:scale-95">Cộng điểm</button></td></tr>)}</tbody></table></div>
+          <div className="mt-8 overflow-x-auto rounded-3xl bg-[var(--surface-lowest)] soft-shadow"><table className="min-w-[900px] w-full text-left"><thead className="bg-[var(--surface-low)]"><tr>{["Học sinh", "Ngày sinh", "Giới tính", "Tổ / chức vụ", "Phụ huynh", "Tiến bộ", ""].map((heading) => <th key={heading} className="px-4 py-4 font-heading text-xs font-bold uppercase tracking-wide text-[var(--on-surface-variant)]">{heading}</th>)}</tr></thead><tbody>{filteredStudents.map((student) => <tr key={student.id} className="border-t border-[var(--surface-high)] transition hover:bg-[var(--surface-low)]"><td className="px-4 py-3"><div className="flex items-center gap-3">{classId ? <StudentAvatarPicker classId={classId} studentId={student.id} value={student.avatarUrl} gender={student.gender === "male" || student.gender === "female" ? student.gender : null} fallback={<span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--primary-fixed)] font-heading font-bold text-[var(--primary)]">{initials(student.name)}</span>} /> : null}<div><Link href={studentDetailHref(student.id, classId)} className="font-heading text-sm font-bold text-[var(--on-surface)] hover:text-[var(--primary)] hover:underline">{student.name}</Link><p className="mt-0.5 font-body text-xs text-[var(--outline)]">{student.studentCode}</p></div></div></td><td className="px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{formatBirthDate(student.birthDate)}</td><td className="px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{genderLabels[student.gender ?? "undisclosed"]}</td><td className="px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{student.group}<br /><span className="font-heading text-xs font-bold text-[var(--primary)]">{student.classRole || "Chưa phân chức vụ"}</span></td><td className="max-w-56 px-4 py-3 font-body text-sm text-[var(--on-surface-variant)]">{student.guardians?.length ? student.guardians.map((guardian) => <span key={guardian.id} className="block truncate">{guardian.relationship}: {guardian.fullName}{guardian.phone ? ` · ${guardian.phone}` : ""}</span>) : "Chưa cập nhật"}</td><td className="px-4 py-3"><span className="font-heading text-sm font-bold text-[var(--primary)]">{student.points} điểm</span><span className="mt-1 block font-body text-xs text-[var(--on-surface-variant)]">Level {student.level}</span></td><td className="px-4 py-3"><button type="button" onClick={() => openScore(student.id)} className="min-h-10 rounded-full bg-[var(--primary)] px-4 font-heading text-xs font-bold text-white transition hover:bg-[var(--primary-container)] active:scale-95">Cộng điểm</button></td></tr>)}</tbody></table></div>
         )
       ) : (
         <div className="mt-8 rounded-[1.5rem] border border-dashed border-[var(--outline-variant)] bg-[var(--surface-lowest)] px-6 py-16 text-center"><UsersThree size={40} className="mx-auto text-[var(--outline)]" /><h2 className="mt-4 font-heading text-xl font-bold text-[var(--on-surface)]">Chưa tìm thấy học sinh</h2><p className="mt-2 font-body text-sm text-[var(--on-surface-variant)]">Thử tên học sinh, tên phụ huynh, số điện thoại hoặc bỏ bớt bộ lọc.</p></div>

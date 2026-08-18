@@ -300,7 +300,7 @@ export async function getClassStudentAvatars(userId: string, classId: string) {
     .orderBy(asc(students.fullName));
 }
 
-export async function getTeacherStudentProfile(userId: string, studentId: string) {
+export async function getTeacherStudentProfile(userId: string, studentId: string, classId?: string) {
   const [profile] = await db
     .select({
       id: students.id,
@@ -343,6 +343,7 @@ export async function getTeacherStudentProfile(userId: string, studentId: string
     .where(
       and(
         eq(classStudents.studentId, studentId),
+        classId ? eq(classStudents.classId, classId) : undefined,
         eq(classMemberships.userId, userId),
         inArray(classMemberships.role, teacherRoles),
         eq(users.status, "active"),
