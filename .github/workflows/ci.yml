@@ -47,10 +47,15 @@ jobs:
             fi
           done
           npm run db:verify
-      - name: Live Neon migration drift check
+      - name: Live Neon runtime privilege check
         if: ${{ vars.ENABLE_DB_VERIFY == 'true' }}
         env:
           DATABASE_URL_RUNTIME: ${{ secrets.E2E_DATABASE_URL_RUNTIME }}
+          REQUIRE_RUNTIME_ROLE: "true"
+        run: npm run db:verify-runtime
+      - name: Live Neon migration drift check
+        if: ${{ vars.ENABLE_DB_VERIFY == 'true' }}
+        env:
           DATABASE_URL_UNPOOLED: ${{ secrets.E2E_DATABASE_URL_UNPOOLED }}
           DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
           REQUIRE_MIGRATION_JOURNAL: "true"

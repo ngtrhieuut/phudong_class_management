@@ -24,7 +24,7 @@
 
 ## Restore drill
 
-Migration-journal rehearsal ngày 2026-08-18 trên branch tạm `br-quiet-meadow-afkk2sia` đã tạo `drizzle.__drizzle_migrations`, ghi 3 SHA-256/timestamp khớp `_journal.json`, chạy `REQUIRE_MIGRATION_JOURNAL=true npm run db:drift` thành công và sau đó được xoá.
+Migration-journal rehearsal ngày 2026-08-18 trên branch tạm `br-quiet-meadow-afkk2sia` đã tạo `drizzle.__drizzle_migrations`, ghi 3 SHA-256/timestamp khớp `_journal.json`, chạy `REQUIRE_MIGRATION_JOURNAL=true npm run db:drift` thành công và sau đó được xoá. Sau approval rollout, cùng journal metadata đã được khôi phục additive trên Neon main và strict drift đã pass; branch `br-rough-king-afqyhji2` dùng để rehearsal runtime role cũng đã được xoá.
 
 Mỗi release lớn cần ghi lại một drill trên branch:
 

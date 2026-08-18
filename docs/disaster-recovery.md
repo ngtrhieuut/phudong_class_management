@@ -24,7 +24,7 @@ Mỗi restore drill phải lưu branch ID, timestamp, schema diff, invariant res
 
 ## Evidence đã chạy ngày 2026-08-18
 
-- Neon main `br-small-dew-afcozbtg`: 28 public tables, 0 policy, 0 bảng bật RLS; invariant read-only cho avatar/orphan class-student/orphan student link/negative snapshot đều bằng 0.
+- Neon main `br-small-dew-afcozbtg`: 28 public tables, 0 policy, 0 bảng bật RLS; `phudong_runtime` đã pass least-privilege verification; invariant read-only cho avatar/orphan class-student/orphan student link/negative snapshot đều bằng 0.
 - Rehearsal branch `br-empty-scene-afpgv9al`: 28 public tables, 1 policy và 1 bảng RLS do test role/policy rehearsal. Schema diff chỉ phản ánh rehearsal role/grants/policy; không áp dụng vào main.
 - Restore/invariant rehearsal trên `br-empty-scene-afpgv9al` trả 0 orphan class-student, 0 orphan student link và 0 negative score snapshot; schema diff đã được Neon MCP đọc lại và không có SQL nào chạy trên main.
-- Release `e3ab1e2` và hardening commit `88c6a3d` không có database migration mới. `npm run db:check` kiểm tra migration files; `npm run db:verify` là contract check read-only với schema live và fail nếu thiếu bảng/cột/index quan trọng. `npm run db:drift` so sánh snapshot bảng/cột/index/enum; live main hiện thiếu migration journal nên cần một change được duyệt để khôi phục khả năng đối chiếu tag. CI chỉ bật live check qua `ENABLE_DB_VERIFY=true` và runtime connection riêng.
+- `npm run db:check` kiểm tra migration files; `npm run db:verify` và `npm run db:verify-runtime` là contract/privilege checks read-only với runtime role. `npm run db:drift` đã pass strict trên main sau khi khôi phục journal với 3 entry khớp hash/timestamp; CI chỉ bật live check qua `ENABLE_DB_VERIFY=true` và connection phù hợp.

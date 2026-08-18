@@ -15,6 +15,7 @@
     "db:check": "drizzle-kit check",
     "db:drift": "tsx scripts/check-migration-drift.ts",
     "db:verify": "tsx scripts/verify-neon-schema.ts",
+    "db:verify-runtime": "tsx scripts/verify-runtime-privileges.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/db/seed.ts",
     "security:routes": "tsx scripts/verify-api-security.ts",
