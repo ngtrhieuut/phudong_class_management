@@ -56,8 +56,10 @@ async function signIn(page: Page, email: string, password: string, nextPath: str
   await page.goto(`/auth/sign-in?next=${encodeURIComponent(nextPath)}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mật khẩu", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Đăng nhập" }).click();
-  await page.waitForLoadState("domcontentloaded");
+  await Promise.all([
+    page.waitForURL((url) => !url.pathname.startsWith("/auth/sign-in"), { timeout: 20_000 }),
+    page.getByRole("button", { name: "Đăng nhập" }).click(),
+  ]);
 }
 
 function taskPayload(targetClassId: string, targetStudentId: string) {

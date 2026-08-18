@@ -71,6 +71,7 @@ jobs:
       - name: Authenticated tenant and idempotency tests
         if: ${{ vars.ENABLE_AUTH_E2E == 'true' }}
         env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
           DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
           DATABASE_URL_RUNTIME: ${{ secrets.E2E_DATABASE_URL_RUNTIME }}
           DATABASE_URL_UNPOOLED: ${{ secrets.E2E_DATABASE_URL_UNPOOLED }}

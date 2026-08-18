@@ -226,14 +226,16 @@ export async function getParentChildData(userId: string, studentId: string) {
       .orderBy(asc(sql`date_trunc('month', ${scoreTransactions.occurredAt} at time zone 'Asia/Ho_Chi_Minh')`)),
     db
       .select({
-        category: sql<string>`coalesce(${behaviorTemplates.category}, 'other')`,
+        // Cast the enum before coalescing so a child with no behavior score
+        // does not make PostgreSQL try to parse the fallback as behavior_category.
+        category: sql<string>`coalesce(${behaviorTemplates.category}::text, 'other')`,
         total: sql<number>`coalesce(sum(${scoreTransactions.lifetimeDelta}), 0)`,
         events: sql<number>`count(${scoreTransactions.id})`,
       })
       .from(scoreTransactions)
       .leftJoin(behaviorTemplates, eq(behaviorTemplates.id, scoreTransactions.behaviorTemplateId))
       .where(and(eq(scoreTransactions.classId, child.classId), eq(scoreTransactions.studentId, studentId)))
-      .groupBy(sql`coalesce(${behaviorTemplates.category}, 'other')`)
+      .groupBy(sql`coalesce(${behaviorTemplates.category}::text, 'other')`)
       .orderBy(desc(sql`sum(${scoreTransactions.lifetimeDelta})`)),
   ]);
 

@@ -7,7 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "on-first-retry",
   },
   projects: [
@@ -17,12 +17,16 @@ export default defineConfig({
     },
     {
       name: "mobile-chromium",
+      // The authenticated suite exercises HTTP/API authorization and uses
+      // one-time invitation/reward fixtures. Run it once in Chromium; keep
+      // mobile coverage focused on the responsive smoke suite.
+      testIgnore: /authenticated-security\.spec\.ts$/,
       use: { ...devices["Pixel 5"] },
     },
   ],
   webServer: {
     command: "npm run dev",
-    url: "http://127.0.0.1:3000",
+    url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },

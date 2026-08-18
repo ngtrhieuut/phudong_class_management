@@ -54,6 +54,10 @@ Fixture phải là tài khoản/test data riêng, không dùng tài khoản giá
 
 `npm run security:routes` là gate tĩnh cho centralized same-origin/no-store policy trên toàn bộ API mutation route. Auth SDK route và signed Blob callback là hai ngoại lệ có giao thức xác thực riêng.
 
+Ngày 2026-08-18, authenticated integration suite đã chạy trên Neon branch tạm `br-cold-glade-afy831xp` với Neon Auth branch và fixture riêng: Chromium `13 passed`, bao phủ teacher/guardian/admin isolation, invitation replay/concurrency và score/reward atomicity. Playwright dùng `PLAYWRIGHT_BASE_URL` (mặc định `http://localhost:3000`) vì Neon Auth từ chối origin `127.0.0.1`; project mobile chỉ chạy smoke UI để tránh dùng lại one-time invitation/reward fixtures. Không có fixture hoặc dữ liệu production được dùng.
+
+Trong cùng lần chạy, phát hiện và sửa lỗi parent query khi học sinh chưa có score: fallback `'other'` phải cast enum `behavior_category` sang `text` trước `coalesce`; nếu không, PostgreSQL trả lỗi `22P02`. Đây là regression được cover bởi guardian integration flow.
+
 Video upload đang bị disable fail-closed trong production. Ảnh được re-encode WebP và loại metadata; video chỉ được mở lại sau khi có worker quarantine/transcode/output verification riêng, không xử lý giả định trong Vercel request path.
 
 Vercel Blob `blob.upload-completed` callback được xác thực bằng chữ ký của SDK, không yêu cầu browser session hoặc same-origin; token payload vẫn chứa actor/class/post và server re-check quyền write trước khi ghi DB. Chỉ nhánh cấp upload token cho browser mới yêu cầu session và same-origin.

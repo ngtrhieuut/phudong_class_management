@@ -23,6 +23,8 @@ Branch rehearsal `br-empty-scene-afpgv9al` đã được dùng để kiểm tra 
 
 Kết quả transaction rehearsal đã xác nhận: role có `USAGE` nhưng không có `CREATE` trên schema `public`, có `SELECT` trên `public.users` nhưng không có `TRUNCATE`, và khi `app.user_id` là UUID không tồn tại thì policy `users_self_read` trả 0 dòng. Neon schema diff của branch chỉ chứa ACL/policy thử nghiệm; không có schema diff trên main.
 
+Trong lần kiểm thử integration ngày 2026-08-18, branch tạm `br-cold-glade-afy831xp` được provision Neon Auth và dùng bốn tài khoản fixture riêng cùng hai organization/class. Login role `phudong_runtime_e2e` trên branch có `SUPERUSER/CREATEROLE/CREATEDB/BYPASSRLS=false`, `USAGE=true`, `CREATE=false`, `SELECT=true`, `TRUNCATE=false`; `npm run db:verify` với connection string của role trả `28/28` bảng, không thiếu cột/index và không có least-privilege violation. Branch không ghi dữ liệu vào `main` và được xem là disposable test fixture.
+
 ## Controls đang hoạt động trước RLS
 
 - Teacher/admin/guardian access đều được kiểm tra server-side theo class/organization/student relation.
