@@ -32,7 +32,7 @@ export async function getTeacherPraiseFeed(userId: string, classId?: string) {
     .from(praisePosts)
     .leftJoin(praisePostStudents, eq(praisePostStudents.postId, praisePosts.id))
     .leftJoin(students, eq(students.id, praisePostStudents.studentId))
-    .leftJoin(mediaAssets, and(eq(mediaAssets.ownerType, "praise_post"), eq(mediaAssets.ownerId, praisePosts.id)))
+    .leftJoin(mediaAssets, and(eq(mediaAssets.ownerType, "praise_post"), eq(mediaAssets.ownerId, praisePosts.id), eq(mediaAssets.mimeType, "image/webp")))
     .where(eq(praisePosts.classId, classContext.id))
     .groupBy(praisePosts.id)
     .orderBy(desc(praisePosts.createdAt));
@@ -64,7 +64,7 @@ export async function getParentPraisePosts(childStudentId: string) {
       ),
     )
     .leftJoin(students, eq(students.id, praisePostStudents.studentId))
-    .leftJoin(mediaAssets, and(eq(mediaAssets.ownerType, "praise_post"), eq(mediaAssets.ownerId, praisePosts.id)))
+    .leftJoin(mediaAssets, and(eq(mediaAssets.ownerType, "praise_post"), eq(mediaAssets.ownerId, praisePosts.id), eq(mediaAssets.mimeType, "image/webp")))
     .where(
       and(
         eq(classStudents.studentId, childStudentId),

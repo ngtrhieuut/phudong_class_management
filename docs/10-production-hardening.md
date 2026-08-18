@@ -53,6 +53,8 @@ Fixture phải là tài khoản/test data riêng, không dùng tài khoản giá
 
 Video upload đang bị disable fail-closed trong production. Ảnh được re-encode WebP và loại metadata; video chỉ được mở lại sau khi có worker quarantine/transcode/output verification riêng, không xử lý giả định trong Vercel request path.
 
+Vercel Blob `blob.upload-completed` callback được xác thực bằng chữ ký của SDK, không yêu cầu browser session hoặc same-origin; token payload vẫn chứa actor/class/post và server re-check quyền write trước khi ghi DB. Chỉ nhánh cấp upload token cho browser mới yêu cầu session và same-origin.
+
 ## Audit log privacy
 
 Audit chỉ lưu identifiers, action, counters và fingerprint cần cho idempotency. Không lưu token thô, URL media, nội dung note, guardian email (kể cả hash), hoặc full name học sinh trong `afterJson` mới. Các log cũ cần retention/cleanup theo [12-privacy-retention-media.md](./12-privacy-retention-media.md).

@@ -20,12 +20,12 @@ Chỉ trả về dữ liệu cần cho màn hình hiện tại. Parent chỉ đ�
 ## Upload requirements
 
 - Allowlist MIME, giới hạn 10 MB cho ảnh, giới hạn pathname và kiểm tra magic bytes server-side. Video production đang fail-closed vì chưa có worker transcode/metadata stripping đã kiểm chứng.
-- Không tin `Content-Type` do client khai báo; callback phải xác thực session/actor và kiểm tra lại quyền write trên praise post.
+- Không tin `Content-Type` do client khai báo; nhánh cấp token phải xác thực session/same-origin, còn callback `blob.upload-completed` phải dựa trên chữ ký Vercel Blob và token actor/class/post rồi kiểm tra lại quyền write trên praise post.
 - Ảnh được kiểm tra magic bytes, đọc lại từ private Blob, giới hạn 24 triệu pixel, resize tối đa 2400px và re-encode WebP quality 82 ở server trước khi persist. Pipeline không giữ metadata nguồn nên EXIF/GPS bị loại khỏi asset đã lưu; kích thước và MIME WebP được ghi vào `media_assets`.
 - Video hiện không được cấp Blob upload token và không được persist. Chỉ mở lại sau khi có quarantine private, transcode profile cố định, output validation, duration/dimension capture và cleanup khi callback/DB lỗi.
 - Serve qua private media endpoint với `no-store`, không dùng URL public lâu hạn. Chỉ giữ `inline` cho loại media cần embed và kiểm soát MIME; loại không cần embed nên chuyển `attachment`.
 
-Khi xóa media, application xóa Blob trước rồi xóa row DB trong transaction. Upload mới dùng prefix quarantine riêng; callback lỗi sẽ best-effort cleanup cả quarantine/sanitized object. Có thể chạy `npm run media:reconcile` để lập inventory dry-run các Blob dưới prefix `praise/` không còn row DB và cũ hơn grace period (mặc định 24 giờ). Xóa chỉ bật thủ công với `MEDIA_RECONCILE_DELETE=true` cùng `MEDIA_RECONCILE_CONFIRM=DELETE_ORPHAN_MEDIA` sau khi review report; không bật mặc định và không coi client callback là bằng chứng duy nhất rằng object đã bị xóa.
+Khi xóa media, application revoke row DB và ghi audit trước, sau đó xóa Blob; nếu Blob cleanup lỗi thì object không còn đường truy cập qua ứng dụng và được reconcile sau. Upload mới dùng prefix quarantine riêng; callback lỗi sẽ best-effort cleanup quarantine, còn sanitized object được giữ lại khi transaction outcome không chắc chắn để tránh xóa nhầm row đã commit. Có thể chạy `npm run media:reconcile` để lập inventory dry-run các Blob dưới prefix `praise/` không còn row DB và các DB row trỏ tới Blob đã mất (mặc định grace period 24 giờ). Xóa chỉ bật thủ công với `MEDIA_RECONCILE_DELETE=true`, `MEDIA_RECONCILE_CONFIRM=DELETE_ORPHAN_MEDIA`, `MEDIA_RECONCILE_EXPECTED_DATABASE`, `MEDIA_RECONCILE_EXPECTED_BLOB_STORE_ID` và `BLOB_STORE_ID` khớp; report chỉ ghi pathname, không ghi full URL. Không bật mặc định và không coi client callback là bằng chứng duy nhất rằng object đã bị xóa.
 
 ## Avatar assets
 

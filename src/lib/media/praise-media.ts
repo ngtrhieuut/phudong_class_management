@@ -18,6 +18,7 @@ import {
   organizationMembers,
   praisePostStudents,
   praisePosts,
+  students,
   studentGuardians,
   users,
 } from "@/db/schema";
@@ -341,11 +342,11 @@ export async function persistPraiseMedia(input: {
     if (storageKey !== input.blob.url) await del(input.blob.url).catch(() => undefined);
     return asset;
   } catch (error) {
-    // Callback failures must not leave a client-uploaded quarantine object or
-    // a sanitized object without a DB row. Cleanup is best effort and can be
-    // retried by the manual reconciliation command.
+    // Callback failures must not leave a client-uploaded quarantine object.
+    // Keep a sanitized object when the transaction outcome is ambiguous: it
+    // may already be referenced by a committed DB row. The reconciler can
+    // safely remove it later when no DB row references it.
     await del(input.blob.url).catch(() => undefined);
-    if (storageKey !== input.blob.url) await del(storageKey).catch(() => undefined);
     throw error;
   }
 }
@@ -426,11 +427,13 @@ async function canGuardianViewMedia(userId: string, target: NonNullable<Awaited<
     .select({ id: studentGuardians.id })
     .from(praisePostStudents)
     .innerJoin(classStudents, and(eq(classStudents.studentId, praisePostStudents.studentId), eq(classStudents.classId, target.classId)))
+    .innerJoin(students, eq(students.id, praisePostStudents.studentId))
     .innerJoin(studentGuardians, and(eq(studentGuardians.studentId, praisePostStudents.studentId), eq(studentGuardians.canView, true)))
     .innerJoin(guardians, and(eq(guardians.id, studentGuardians.guardianId), eq(guardians.userId, userId)))
     .where(
       and(
         eq(praisePostStudents.postId, target.postId),
+        eq(students.status, "active"),
         isNull(classStudents.leftAt),
         notExists(
           db
@@ -452,6 +455,10 @@ async function canGuardianViewMedia(userId: string, target: NonNullable<Awaited<
 export async function getAccessiblePraiseMedia(mediaId: string, userId: string) {
   const target = await getMediaTarget(mediaId);
   if (!target) return null;
+  // Legacy media is fail-closed until it has passed the current private image
+  // pipeline. DELETE remains available to authorized admins/teachers so old
+  // assets can be removed without ever being streamed.
+  if (target.mimeType !== "image/webp") return null;
   if (await canTeacherViewMedia(userId, target.classId)) return target;
   // Admins retain organization-scoped access for retention and deletion
   // operations, including archived classes. Guardian access remains limited
@@ -468,14 +475,9 @@ export async function deletePraiseMedia(mediaId: string, userId: string) {
   const canManage = (await canTeacherManageMedia(userId, target.classId)) || (await canAdminViewMedia(userId, target.organizationId));
   if (!canManage) throw new PraiseMediaError("FORBIDDEN", "Bạn không có quyền xóa media này.");
 
-  try {
-    await del(target.storageKey);
-  } catch {
-    throw new PraiseMediaError("STORAGE_NOT_CONFIGURED", "Không thể xóa file khỏi storage.");
-  }
-
   await db.transaction(async (tx) => {
-    await tx.delete(mediaAssets).where(eq(mediaAssets.id, mediaId));
+    const [deletedAsset] = await tx.delete(mediaAssets).where(eq(mediaAssets.id, mediaId)).returning({ id: mediaAssets.id });
+    if (!deletedAsset) throw new PraiseMediaError("NOT_FOUND", "Không tìm thấy media.");
     await tx.insert(auditLogs).values({
       organizationId: target.organizationId,
       actorUserId: userId,
@@ -485,5 +487,13 @@ export async function deletePraiseMedia(mediaId: string, userId: string) {
       afterJson: { ownerType: PRAISE_MEDIA_OWNER_TYPE, ownerId: target.postId },
     });
   });
+
+  // Revoke DB access first. If Blob deletion fails, no user can fetch the
+  // object anymore and the reconciliation job can remove the orphan safely.
+  try {
+    await del(target.storageKey);
+  } catch {
+    throw new PraiseMediaError("STORAGE_NOT_CONFIGURED", "Media đã được ẩn khỏi ứng dụng nhưng chưa thể xóa file khỏi storage.");
+  }
   return { id: mediaId, deleted: true };
 }
