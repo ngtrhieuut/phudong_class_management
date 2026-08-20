@@ -8,6 +8,8 @@ import {
   classRoles,
   classMemberships,
   classStudents,
+  guardians,
+  studentGuardians,
   students,
   users,
 } from "@/db/schema";
@@ -23,16 +25,33 @@ const dateSchema = z
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
   }, "Ngày sinh không hợp lệ.");
 
+const nullableProfileText = (max: number) => z.string().trim().max(max).nullable().optional();
+
+const guardianUpdateSchema = z.object({
+  guardianId: z.string().uuid().nullable().optional(),
+  relationship: z.enum(["Cha", "Mẹ"]),
+  fullName: nullableProfileText(200),
+  phone: nullableProfileText(50),
+  occupation: nullableProfileText(200),
+  birthYear: z.number().int().min(1900).max(2100).nullable().optional(),
+});
+
 const studentFieldsSchema = z.object({
   classId: z.string().uuid(),
   studentCode: z.string().trim().min(1).max(100),
   fullName: z.string().trim().min(1).max(200),
   birthDate: dateSchema.nullable().optional(),
+  birthPlace: nullableProfileText(200),
   gender: z.enum(["male", "female", "other", "undisclosed"]).nullable().optional(),
+  healthInsuranceNumber: nullableProfileText(50),
+  neighborhood: nullableProfileText(100),
+  houseNumber: nullableProfileText(200),
+  ward: nullableProfileText(100),
   avatarUrl: z.string().trim().max(200).refine((value) => isAvatarPresetUrl(value), "Avatar không hợp lệ.").nullable().optional(),
   classRoleId: z.string().uuid().nullable().optional(),
   seatNo: z.number().int().min(1).max(200).nullable().optional(),
   groupName: z.string().trim().max(100).nullable().optional(),
+  guardians: z.array(guardianUpdateSchema).max(2).optional(),
 });
 
 const updateStudentSchema = studentFieldsSchema.extend({
@@ -143,7 +162,12 @@ export async function createStudent(input: unknown, actorUserId: string) {
         studentCode: parsed.data.studentCode,
         fullName: parsed.data.fullName,
         birthDate: parsed.data.birthDate ?? null,
+        birthPlace: parsed.data.birthPlace ?? null,
         gender: parsed.data.gender ?? null,
+        healthInsuranceNumber: parsed.data.healthInsuranceNumber ?? null,
+        neighborhood: parsed.data.neighborhood ?? null,
+        houseNumber: parsed.data.houseNumber ?? null,
+        ward: parsed.data.ward ?? null,
         avatarUrl: parsed.data.avatarUrl ?? null,
         status: "active",
       })
@@ -181,7 +205,12 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
         studentCode: students.studentCode,
         fullName: students.fullName,
         birthDate: students.birthDate,
+        birthPlace: students.birthPlace,
         gender: students.gender,
+        healthInsuranceNumber: students.healthInsuranceNumber,
+        neighborhood: students.neighborhood,
+        houseNumber: students.houseNumber,
+        ward: students.ward,
         avatarUrl: students.avatarUrl,
         seatNo: classStudents.seatNo,
         groupName: classStudents.groupName,
@@ -223,7 +252,12 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
       studentCode: nextCode,
       fullName: parsed.data.fullName ?? current.fullName,
       ...(parsed.data.birthDate !== undefined ? { birthDate: parsed.data.birthDate } : {}),
+      ...(parsed.data.birthPlace !== undefined ? { birthPlace: parsed.data.birthPlace } : {}),
       ...(parsed.data.gender !== undefined ? { gender: parsed.data.gender } : {}),
+      ...(parsed.data.healthInsuranceNumber !== undefined ? { healthInsuranceNumber: parsed.data.healthInsuranceNumber } : {}),
+      ...(parsed.data.neighborhood !== undefined ? { neighborhood: parsed.data.neighborhood } : {}),
+      ...(parsed.data.houseNumber !== undefined ? { houseNumber: parsed.data.houseNumber } : {}),
+      ...(parsed.data.ward !== undefined ? { ward: parsed.data.ward } : {}),
       ...(parsed.data.avatarUrl !== undefined ? { avatarUrl: parsed.data.avatarUrl } : {}),
       updatedAt: new Date(),
     };
@@ -237,6 +271,71 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
         updatedAt: new Date(),
       })
       .where(and(eq(classStudents.classId, parsed.data.classId), eq(classStudents.studentId, studentId)));
+
+    const changedGuardianFields: string[] = [];
+    for (const guardianInput of parsed.data.guardians ?? []) {
+      const hasNewGuardianData = [guardianInput.fullName, guardianInput.phone, guardianInput.occupation, guardianInput.birthYear]
+        .some((value) => value !== undefined && value !== null && String(value).trim() !== "");
+      if (!guardianInput.guardianId && !hasNewGuardianData) continue;
+
+      const [existingRelation] = await tx
+        .select({
+          relationId: studentGuardians.id,
+          guardianId: guardians.id,
+          guardianUserId: guardians.userId,
+        })
+        .from(studentGuardians)
+        .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+        .where(
+          and(
+            eq(studentGuardians.studentId, studentId),
+            guardianInput.guardianId
+              ? eq(guardians.id, guardianInput.guardianId)
+              : eq(studentGuardians.relationship, guardianInput.relationship),
+          ),
+        )
+        .limit(1);
+
+      if (existingRelation) {
+        await tx
+          .update(guardians)
+          .set({
+            phone: guardianInput.phone ?? null,
+            occupation: guardianInput.occupation ?? null,
+            birthYear: guardianInput.birthYear ?? null,
+            ...(!existingRelation.guardianUserId && guardianInput.fullName?.trim()
+              ? { fullName: guardianInput.fullName.trim() }
+              : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(guardians.id, existingRelation.guardianId));
+        changedGuardianFields.push(guardianInput.relationship);
+        continue;
+      }
+
+      const fullName = guardianInput.fullName?.trim();
+      if (!fullName) {
+        throw new StudentServiceError("INVALID_INPUT", `Cần có họ tên ${guardianInput.relationship.toLocaleLowerCase()} khi tạo liên hệ mới.`);
+      }
+      const [createdGuardian] = await tx
+        .insert(guardians)
+        .values({
+          fullName,
+          phone: guardianInput.phone ?? null,
+          occupation: guardianInput.occupation ?? null,
+          birthYear: guardianInput.birthYear ?? null,
+        })
+        .returning({ id: guardians.id });
+      await tx.insert(studentGuardians).values({
+        studentId,
+        guardianId: createdGuardian.id,
+        relationship: guardianInput.relationship,
+        canView: false,
+        receivesNotifications: false,
+      });
+      changedGuardianFields.push(guardianInput.relationship);
+    }
+
     await tx.insert(auditLogs).values({
       organizationId: access.organizationId,
       actorUserId,
@@ -246,7 +345,7 @@ export async function updateStudent(input: unknown, studentId: string, actorUser
       beforeJson: { studentCode: current.studentCode, seatNo: current.seatNo, groupName: current.groupName, classRoleId: current.classRoleId },
       afterJson: {
         classId: parsed.data.classId,
-        changedFields: Object.keys(studentValues).filter((field) => field !== "updatedAt"),
+        changedFields: [...Object.keys(studentValues).filter((field) => field !== "updatedAt"), ...changedGuardianFields.map((relationship) => `guardian.${relationship}`)],
         studentCode: nextCode,
         seatNo: parsed.data.seatNo !== undefined ? parsed.data.seatNo : current.seatNo,
         groupName: parsed.data.groupName !== undefined ? parsed.data.groupName : current.groupName,

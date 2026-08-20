@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { BadgeAwardForm } from "@/components/dashboard/badge-award-form";
 import { ScoreAdjustmentForm } from "@/components/dashboard/score-adjustment-form";
 import { StudentEditForm } from "@/components/dashboard/student-edit-form";
+import { StudentProfileForm } from "@/components/dashboard/student-profile-form";
 import { StudentAvatarPicker } from "@/components/ui/avatar-template-picker";
 import { ensureAppUser } from "@/lib/auth/app-user";
 import { requireUserSession } from "@/lib/auth/server";
@@ -60,11 +61,14 @@ export default async function StudentDetailPage({ params, searchParams }: { para
               <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Giới tính</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{profile.gender === "male" ? "Nam" : profile.gender === "female" ? "Nữ" : profile.gender === "other" ? "Khác" : "Chưa khai báo"}</dd></div>
               <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Số thứ tự</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{profile.seatNo ?? "—"}</dd></div>
               <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Chức vụ lớp</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--primary)]">{profile.classRoleName || "Chưa phân chức vụ"}</dd></div>
+              <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Nơi sinh</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{profile.birthPlace || "Chưa cập nhật"}</dd></div>
+              <div><dt className="font-body text-xs text-[var(--on-surface-variant)]">Mã số BHYT</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{profile.healthInsuranceNumber || "Chưa cập nhật"}</dd></div>
+              <div className="col-span-2"><dt className="font-body text-xs text-[var(--on-surface-variant)]">Địa chỉ</dt><dd className="mt-1 font-heading text-sm font-bold text-[var(--on-surface)]">{[profile.houseNumber, profile.neighborhood, profile.ward].filter(Boolean).join(", ") || "Chưa cập nhật"}</dd></div>
             </dl>
           </div>
           <div className="rounded-[1.5rem] bg-[var(--surface-low)] p-6">
             <div className="flex items-center justify-between gap-3"><div><h2 className="font-heading text-xl font-bold text-[var(--primary)]">Phụ huynh / người giám hộ</h2><p className="mt-1 font-body text-sm text-[var(--on-surface-variant)]">Thông tin được lấy từ danh sách Excel của lớp.</p></div><span className="rounded-full bg-[var(--surface-lowest)] px-3 py-1 font-heading text-xs font-bold text-[var(--primary)]">{guardians.length} liên hệ</span></div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">{guardians.map((guardian) => <article key={guardian.id} className="rounded-2xl bg-[var(--surface-lowest)] p-4 transition hover:-translate-y-0.5 hover:shadow-md"><p className="font-heading text-sm font-bold text-[var(--on-surface)]">{guardian.fullName}</p><p className="mt-1 font-body text-xs text-[var(--tertiary)]">{guardian.relationship}</p>{guardian.phone ? <p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">☎ Điện thoại liên hệ: {guardian.phone}</p> : <p className="mt-3 font-body text-sm text-[var(--outline)]">Chưa có điện thoại liên hệ</p>}{guardian.email ? <p className="mt-1 truncate font-body text-xs text-[var(--on-surface-variant)]">{guardian.email}</p> : null}</article>)}{guardians.length === 0 ? <p className="sm:col-span-2 rounded-2xl border border-dashed border-[var(--outline-variant)] p-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có dữ liệu phụ huynh. Có thể nhập lại file Excel ở mục Nhập danh sách.</p> : null}</div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">{guardians.map((guardian) => <article key={guardian.id} className="rounded-2xl bg-[var(--surface-lowest)] p-4 transition hover:-translate-y-0.5 hover:shadow-md"><p className="font-heading text-sm font-bold text-[var(--on-surface)]">{guardian.fullName}</p><p className="mt-1 font-body text-xs text-[var(--tertiary)]">{guardian.relationship}</p>{guardian.phone ? <p className="mt-3 font-body text-sm text-[var(--on-surface-variant)]">☎ Điện thoại liên hệ: {guardian.phone}</p> : <p className="mt-3 font-body text-sm text-[var(--outline)]">Chưa có điện thoại liên hệ</p>}{guardian.occupation ? <p className="mt-1 font-body text-sm text-[var(--on-surface-variant)]">Nghề nghiệp: {guardian.occupation}</p> : null}{guardian.birthYear ? <p className="mt-1 font-body text-sm text-[var(--on-surface-variant)]">Năm sinh: {guardian.birthYear}</p> : null}{guardian.email ? <p className="mt-1 truncate font-body text-xs text-[var(--on-surface-variant)]">{guardian.email}</p> : null}</article>)}{guardians.length === 0 ? <p className="sm:col-span-2 rounded-2xl border border-dashed border-[var(--outline-variant)] p-5 font-body text-sm text-[var(--on-surface-variant)]">Chưa có dữ liệu phụ huynh. Có thể nhập lại file Excel ở mục Nhập danh sách.</p> : null}</div>
           </div>
         </section>
 
@@ -109,6 +113,20 @@ export default async function StudentDetailPage({ params, searchParams }: { para
               classRoleId: profile.classRoleId,
             }}
             classRoles={classRoles}
+          />
+        </div>
+        <div className="mt-6">
+          <StudentProfileForm
+            classId={studentData.classContext.id}
+            studentId={profile.id}
+            initial={{
+              birthPlace: profile.birthPlace,
+              healthInsuranceNumber: profile.healthInsuranceNumber,
+              neighborhood: profile.neighborhood,
+              houseNumber: profile.houseNumber,
+              ward: profile.ward,
+            }}
+            guardians={guardians}
           />
         </div>
         <div className="mt-6">

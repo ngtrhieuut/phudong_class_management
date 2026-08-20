@@ -59,7 +59,12 @@ Dùng cho giáo viên phụ trách nhiều lớp.
 - full_name
 - short_name
 - birth_date
+- birth_place nullable
 - gender nullable
+- health_insurance_number nullable
+- neighborhood nullable
+- house_number nullable
+- ward nullable
 - avatar_url
 - status
 
@@ -76,7 +81,10 @@ Dùng cho giáo viên phụ trách nhiều lớp.
 - id
 - user_id nullable
 - full_name
-- phone/email
+- phone
+- occupation nullable
+- birth_year nullable
+- email
 
 ### student_guardians
 - student_id

@@ -4,12 +4,23 @@ export type StudentImportField =
   | 'fullName'
   | 'gender'
   | 'birthDate'
+  | 'birthPlace'
+  | 'healthInsuranceNumber'
+  | 'neighborhood'
+  | 'houseNumber'
+  | 'ward'
   | 'group'
   | 'classRole'
   | 'seatNumber'
   | 'contactPhone'
   | 'fatherName'
+  | 'fatherOccupation'
+  | 'fatherPhone'
+  | 'fatherBirthYear'
   | 'motherName'
+  | 'motherOccupation'
+  | 'motherPhone'
+  | 'motherBirthYear'
   | 'className'
   | 'classId';
 
@@ -32,11 +43,22 @@ export interface NormalizedStudentImportRow {
   fullName: string;
   gender?: StudentGender;
   birthDate?: string;
+  birthPlace?: string;
+  healthInsuranceNumber?: string;
+  neighborhood?: string;
+  houseNumber?: string;
+  ward?: string;
   group?: string;
   classRole?: string;
   contactPhone?: string;
   fatherName?: string;
+  fatherOccupation?: string;
+  fatherPhone?: string;
+  fatherBirthYear?: number;
   motherName?: string;
+  motherOccupation?: string;
+  motherPhone?: string;
+  motherBirthYear?: number;
   className?: string;
   classId?: string;
   upsertKeys: StudentUpsertKeys;
@@ -58,6 +80,7 @@ export type StudentImportErrorCode =
   | 'invalid_seat_number'
   | 'invalid_gender'
   | 'invalid_birth_date'
+  | 'invalid_parent_birth_year'
   | 'class_mismatch'
   | 'class_context_name_required';
 
@@ -110,12 +133,15 @@ const HEADER_ALIASES: Readonly<Record<StudentImportField, readonly string[]>> = 
     'student id',
     'student_id',
     'id học sinh',
+    'số định danh',
+    's? đ?nh danh',
     'code',
   ],
   fullName: [
     'họ và tên',
     'họ tên',
     'họ tên học sinh',
+    'h? tên h?c sinh',
     'tên học sinh',
     'full name',
     'full_name',
@@ -123,7 +149,7 @@ const HEADER_ALIASES: Readonly<Record<StudentImportField, readonly string[]>> = 
     'student_name',
     'name',
   ],
-  gender: ['giới tính', 'phái', 'gender', 'sex'],
+  gender: ['giới tính', 'gi?i tính', 'phái', 'gender', 'sex'],
   birthDate: [
     'ngày sinh',
     'ngày tháng năm sinh',
@@ -131,13 +157,33 @@ const HEADER_ALIASES: Readonly<Record<StudentImportField, readonly string[]>> = 
     'birth date',
     'birth_date',
     'dob',
+    'ng?y sinh',
   ],
+  birthPlace: ['nơi sinh', 'noi sinh', 'birth place', 'birth_place'],
+  healthInsuranceNumber: [
+    'mã số bhyt',
+    'mã bhyt',
+    'số thẻ bhyt',
+    'số bhyt',
+    'mã s? bhyt',
+    'health insurance number',
+    'health_insurance_number',
+  ],
+  neighborhood: ['khu phố', 'khu pho', 'khu ph?', 'neighborhood'],
+  houseNumber: ['số nhà', 'so nha', 's? nhà', 'house number', 'house_number'],
+  ward: ['phường', 'phuong', 'phu?ng', 'ward'],
   group: ['tổ', 'nhóm', 'group', 'group name', 'group_name', 'team'],
   classRole: ['chức vụ', 'chức vụ lớp', 'vai trò lớp', 'class role', 'class_role', 'role'],
   seatNumber: ['số ghế', 'số chỗ', 'seat', 'seat no', 'seat number', 'seat_number'],
-  contactPhone: ['điện thoại', 'số điện thoại', 'phone', 'phone number', 'contact phone', 'contact_phone'],
+  contactPhone: ['điện thoại liên hệ', 'số điện thoại liên hệ', 'contact phone', 'contact_phone'],
   fatherName: ['tên cha', 'họ tên cha', 'tên bố', 'họ tên bố', 'father name', 'father_name', 'parent father'],
+  fatherOccupation: ['nghề nghiệp cha', 'nghề cha', 'nghề nghiệp bố', 'nghề bố', 'father occupation', 'father_occupation'],
+  fatherPhone: ['điện thoại cha', 'số điện thoại cha', 'sđt cha', 'sdt cha', 'điện thoại bố', 'số điện thoại bố', 'father phone', 'father_phone'],
+  fatherBirthYear: ['năm sinh cha', 'năm sinh bố', 'father birth year', 'father_birth_year'],
   motherName: ['tên mẹ', 'họ tên mẹ', 'mother name', 'mother_name', 'parent mother'],
+  motherOccupation: ['nghề nghiệp mẹ', 'nghề mẹ', 'mother occupation', 'mother_occupation'],
+  motherPhone: ['điện thoại mẹ', 'số điện thoại mẹ', 'sđt mẹ', 'sdt mẹ', 'mother phone', 'mother_phone'],
+  motherBirthYear: ['năm sinh mẹ', 'mother birth year', 'mother_birth_year'],
   className: ['lớp', 'lớp học', 'class', 'class name', 'class_name'],
   classId: ['mã lớp', 'mã lớp học', 'class id', 'class_id'],
 };
@@ -148,6 +194,7 @@ const GENDER_ALIASES: Readonly<Record<string, StudentGender>> = {
   m: 'male',
   trai: 'male',
   nữ: 'female',
+  'n?': 'female',
   nu: 'female',
   female: 'female',
   f: 'female',
@@ -176,6 +223,7 @@ const ERROR_MESSAGES: Readonly<Record<StudentImportErrorCode, string>> = {
   invalid_seat_number: 'Seat number must be a positive integer.',
   invalid_gender: 'Gender is not supported.',
   invalid_birth_date: 'Birth date is invalid.',
+  invalid_parent_birth_year: 'Parent birth year is invalid.',
   class_mismatch: 'Row class does not match the import context.',
   class_context_name_required: 'Class name context is required to validate the row class.',
 };
@@ -190,7 +238,7 @@ function removeVietnameseMarks(value: string): string {
 }
 
 function normalizeHeaderKey(value: string): string {
-  return removeVietnameseMarks(value)
+  return removeVietnameseMarks(value.replace(/__column_\d+$/i, ''))
     .toLocaleLowerCase('en-US')
     .replace(/[^a-z0-9]+/g, '');
 }
@@ -234,8 +282,17 @@ function buildAliasLookup(): Readonly<Record<string, StudentImportField>> {
 
 const HEADER_ALIAS_LOOKUP = buildAliasLookup();
 
+const GENERIC_HEADER_FIELDS: Readonly<Record<string, readonly StudentImportField[]>> = {
+  nghe: ['fatherOccupation', 'motherOccupation'],
+  ngh: ['fatherOccupation', 'motherOccupation'],
+  dienthoai: ['fatherPhone', 'motherPhone'],
+  dinthoai: ['fatherPhone', 'motherPhone'],
+  namsinh: ['fatherBirthYear', 'motherBirthYear'],
+};
+
 export function normalizeStudentImportHeader(header: string): StudentImportField | undefined {
-  return HEADER_ALIAS_LOOKUP[normalizeHeaderKey(header)];
+  const key = normalizeHeaderKey(header);
+  return HEADER_ALIAS_LOOKUP[key] ?? GENERIC_HEADER_FIELDS[key]?.[0];
 }
 
 export function normalizeStudentImportHeaders(
@@ -248,25 +305,42 @@ export function normalizeStudentImportHeaders(
   const firstHeaderByField = new Map<StudentImportField, string>();
   const errors: StudentImportError[] = [];
 
+  const genericHeaderCounts = new Map<string, number>();
+  for (const header of headers) {
+    const key = normalizeHeaderKey(header);
+    if (GENERIC_HEADER_FIELDS[key]) {
+      genericHeaderCounts.set(key, (genericHeaderCounts.get(key) ?? 0) + 1);
+    }
+  }
+
   headers.forEach((header) => {
-    const field = normalizeStudentImportHeader(header);
+    const key = normalizeHeaderKey(header);
+    let field: StudentImportField | undefined = HEADER_ALIAS_LOOKUP[key];
+    if (!field && GENERIC_HEADER_FIELDS[key]) {
+      const candidates = GENERIC_HEADER_FIELDS[key];
+      const isSingleContactPhone = (key === 'dienthoai' || key === 'dinthoai') && genericHeaderCounts.get(key) === 1;
+      field = isSingleContactPhone
+        ? 'contactPhone'
+        : candidates.find((candidate) => !firstHeaderByField.has(candidate));
+    }
     if (!field) {
       return;
     }
+    const resolvedField: StudentImportField = field;
 
-    const previousHeader = firstHeaderByField.get(field);
+    const previousHeader = firstHeaderByField.get(resolvedField);
     if (previousHeader) {
       errors.push({
         rowNumber: 1,
         code: 'duplicate_header',
-        field,
+        field: resolvedField,
         message: ERROR_MESSAGES.duplicate_header,
       });
       return;
     }
 
-    firstHeaderByField.set(field, header);
-    fields[header] = field;
+    firstHeaderByField.set(resolvedField, header);
+    fields[header] = resolvedField;
   });
 
   for (const field of REQUIRED_FIELDS) {
@@ -404,6 +478,14 @@ function parseBirthDate(value: unknown): string | undefined | 'invalid' {
   }
 
   return 'invalid';
+}
+
+function parseBirthYear(value: unknown): number | undefined | 'invalid' {
+  const text = toText(value);
+  if (!text) return undefined;
+  if (!/^\d{4}$/.test(text)) return 'invalid';
+  const year = Number(text);
+  return year >= 1900 && year <= 2100 ? year : 'invalid';
 }
 
 function readField(
@@ -566,6 +648,20 @@ export function buildStudentImportPlan(input: {
       addError(rowErrorList, rowNumber, 'invalid_birth_date', 'birthDate');
     }
 
+    const parsedFatherBirthYear = parseBirthYear(
+      readField(row, headers, normalizedHeaderResult.fields, 'fatherBirthYear'),
+    );
+    if (parsedFatherBirthYear === 'invalid') {
+      addError(rowErrorList, rowNumber, 'invalid_parent_birth_year', 'fatherBirthYear');
+    }
+
+    const parsedMotherBirthYear = parseBirthYear(
+      readField(row, headers, normalizedHeaderResult.fields, 'motherBirthYear'),
+    );
+    if (parsedMotherBirthYear === 'invalid') {
+      addError(rowErrorList, rowNumber, 'invalid_parent_birth_year', 'motherBirthYear');
+    }
+
     const classMatch = validateClassMatch(
       row,
       rowNumber,
@@ -585,11 +681,22 @@ export function buildStudentImportPlan(input: {
         fullName,
         gender: parsedGender === 'invalid' ? undefined : parsedGender,
         birthDate: parsedBirthDate === 'invalid' ? undefined : parsedBirthDate,
+        birthPlace: toText(readField(row, headers, normalizedHeaderResult.fields, 'birthPlace')),
+        healthInsuranceNumber: toText(readField(row, headers, normalizedHeaderResult.fields, 'healthInsuranceNumber')),
+        neighborhood: toText(readField(row, headers, normalizedHeaderResult.fields, 'neighborhood')),
+        houseNumber: toText(readField(row, headers, normalizedHeaderResult.fields, 'houseNumber')),
+        ward: toText(readField(row, headers, normalizedHeaderResult.fields, 'ward')),
         group: toText(readField(row, headers, normalizedHeaderResult.fields, 'group')),
         classRole: toText(readField(row, headers, normalizedHeaderResult.fields, 'classRole')),
         contactPhone: toText(readField(row, headers, normalizedHeaderResult.fields, 'contactPhone')),
         fatherName: toText(readField(row, headers, normalizedHeaderResult.fields, 'fatherName')),
+        fatherOccupation: toText(readField(row, headers, normalizedHeaderResult.fields, 'fatherOccupation')),
+        fatherPhone: toText(readField(row, headers, normalizedHeaderResult.fields, 'fatherPhone')),
+        fatherBirthYear: parsedFatherBirthYear === 'invalid' ? undefined : parsedFatherBirthYear,
         motherName: toText(readField(row, headers, normalizedHeaderResult.fields, 'motherName')),
+        motherOccupation: toText(readField(row, headers, normalizedHeaderResult.fields, 'motherOccupation')),
+        motherPhone: toText(readField(row, headers, normalizedHeaderResult.fields, 'motherPhone')),
+        motherBirthYear: parsedMotherBirthYear === 'invalid' ? undefined : parsedMotherBirthYear,
         className: classMatch.className,
         classId: classMatch.classId,
         upsertKeys: buildStudentUpsertKeys(input.context, studentCode),

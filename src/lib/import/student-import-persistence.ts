@@ -151,7 +151,14 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
     let createdGuardianLinks = 0;
     let updatedGuardianLinks = 0;
 
-    async function upsertGuardian(studentId: string, fullName: string | undefined, relationship: string, phone: string | null) {
+    async function upsertGuardian(
+      studentId: string,
+      fullName: string | undefined,
+      relationship: string,
+      phone: string | null,
+      occupation: string | null,
+      birthYear: number | null,
+    ) {
       const normalizedName = fullName?.trim();
       if (!normalizedName) return;
 
@@ -181,13 +188,15 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
         // Do not let a roster import rewrite an authenticated guardian's
         // identity. Teacher-maintained contact fields are safe to update only
         // for the local, not-yet-authenticated contact record.
-        if (!existingRelation.guardianUserId) {
-          await tx
-            .update(guardians)
-            .set({ fullName: normalizedName, phone, updatedAt: new Date() })
-            .where(eq(guardians.id, existingRelation.guardianId));
-          updatedGuardians += 1;
-        }
+        const guardianValues = {
+          phone,
+          occupation,
+          birthYear,
+          updatedAt: new Date(),
+          ...(!existingRelation.guardianUserId ? { fullName: normalizedName } : {}),
+        };
+        await tx.update(guardians).set(guardianValues).where(eq(guardians.id, existingRelation.guardianId));
+        updatedGuardians += 1;
         await tx
           .update(studentGuardians)
           .set({ relationship, updatedAt: new Date() })
@@ -212,14 +221,15 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
       let guardianId: string;
       if (existingGuardian) {
         guardianId = existingGuardian.id;
-        if (phone) {
-          await tx.update(guardians).set({ phone, updatedAt: new Date() }).where(eq(guardians.id, guardianId));
-        }
+        await tx
+          .update(guardians)
+          .set({ phone, occupation, birthYear, updatedAt: new Date() })
+          .where(eq(guardians.id, guardianId));
         updatedGuardians += 1;
       } else {
         const [createdGuardian] = await tx
           .insert(guardians)
-          .values({ fullName: normalizedName, phone })
+          .values({ fullName: normalizedName, phone, occupation, birthYear })
           .returning({ id: guardians.id });
         guardianId = createdGuardian.id;
         createdGuardians += 1;
@@ -281,6 +291,11 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
         updatedAt: new Date(),
         ...(row.birthDate !== undefined ? { birthDate: row.birthDate } : {}),
         ...(row.gender !== undefined ? { gender: row.gender } : {}),
+        ...(row.birthPlace !== undefined ? { birthPlace: row.birthPlace } : {}),
+        ...(row.healthInsuranceNumber !== undefined ? { healthInsuranceNumber: row.healthInsuranceNumber } : {}),
+        ...(row.neighborhood !== undefined ? { neighborhood: row.neighborhood } : {}),
+        ...(row.houseNumber !== undefined ? { houseNumber: row.houseNumber } : {}),
+        ...(row.ward !== undefined ? { ward: row.ward } : {}),
       };
       const studentInsertValues = {
         ...studentUpdateValues,
@@ -353,12 +368,22 @@ export async function persistStudentImportPlan(plan: StudentImportPlan, actorUse
       }
 
       const contactPhone = row.contactPhone?.trim() || null;
-      await upsertGuardian(studentId, row.fatherName, "Cha", contactPhone);
-      // The source workbook contains one household contact column, not a
-      // separate father/mother phone. Keep the same contact number on both
-      // named parent records so it is searchable without claiming it is a
-      // personal number for only one parent.
-      await upsertGuardian(studentId, row.motherName, "Mẹ", contactPhone);
+      await upsertGuardian(
+        studentId,
+        row.fatherName,
+        "Cha",
+        row.fatherPhone?.trim() || contactPhone,
+        row.fatherOccupation?.trim() || null,
+        row.fatherBirthYear ?? null,
+      );
+      await upsertGuardian(
+        studentId,
+        row.motherName,
+        "Mẹ",
+        row.motherPhone?.trim() || contactPhone,
+        row.motherOccupation?.trim() || null,
+        row.motherBirthYear ?? null,
+      );
     }
 
     await tx.insert(auditLogs).values({

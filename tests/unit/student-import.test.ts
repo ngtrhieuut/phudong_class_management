@@ -69,6 +69,61 @@ describe('student import normalization and dry-run planning', () => {
     });
   });
 
+  it('maps extended student and two-parent columns, including duplicate generic headers', () => {
+    const plan = buildStudentImportPlan({
+      context,
+      headers: [
+        'Mã học sinh',
+        'Họ và tên',
+        'Nơi sinh',
+        'Mã số BHYT',
+        'Khu phố',
+        'Số nhà',
+        'Phường',
+        'Tên cha',
+        'Nghề',
+        'Nghề__column_2',
+        'Điện thoại',
+        'Điện thoại__column_2',
+        'Năm sinh',
+        'Năm sinh__column_2',
+        'Tên mẹ',
+      ],
+      rows: [{
+        'Mã học sinh': 'HS-003',
+        'Họ và tên': 'Lê Bình',
+        'Nơi sinh': 'Bệnh viện',
+        'Mã số BHYT': '0791234567',
+        'Khu phố': '1',
+        'Số nhà': '12A',
+        'Phường': 'Bến Nghé',
+        'Tên cha': 'Lê Văn Bình',
+        Nghề: 'Kỹ sư',
+        'Nghề__column_2': 'Giáo viên',
+        'Điện thoại': '0901000001',
+        'Điện thoại__column_2': '0901000002',
+        'Năm sinh': '1978',
+        'Năm sinh__column_2': '1982',
+        'Tên mẹ': 'Nguyễn Thị Hoa',
+      }],
+    });
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.normalizedRows[0]).toMatchObject({
+      birthPlace: 'Bệnh viện',
+      healthInsuranceNumber: '0791234567',
+      neighborhood: '1',
+      houseNumber: '12A',
+      ward: 'Bến Nghé',
+      fatherOccupation: 'Kỹ sư',
+      fatherPhone: '0901000001',
+      fatherBirthYear: 1978,
+      motherOccupation: 'Giáo viên',
+      motherPhone: '0901000002',
+      motherBirthYear: 1982,
+    });
+  });
+
   it('maps Vietnamese and English header aliases to the same fields', () => {
     expect(normalizeStudentImportHeader('SỐ THỨ TỰ')).toBe('stt');
     expect(normalizeStudentImportHeader('Student Code')).toBe('studentCode');

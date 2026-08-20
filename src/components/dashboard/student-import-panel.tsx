@@ -17,11 +17,22 @@ type ImportRow = {
   fullName: string;
   gender?: string;
   birthDate?: string;
+  birthPlace?: string;
+  healthInsuranceNumber?: string;
+  neighborhood?: string;
+  houseNumber?: string;
+  ward?: string;
   group?: string;
   seatNumber?: number;
   contactPhone?: string;
   fatherName?: string;
+  fatherOccupation?: string;
+  fatherPhone?: string;
+  fatherBirthYear?: number;
   motherName?: string;
+  motherOccupation?: string;
+  motherPhone?: string;
+  motherBirthYear?: number;
 };
 
 type ImportResult = {
@@ -66,6 +77,29 @@ function parseDelimitedText(text: string, delimiter: string): string[][] {
   return rows;
 }
 
+function makeUniqueHeaders(headers: string[]): string[] {
+  const occurrences = new Map<string, number>();
+  return headers.map((rawHeader) => {
+    const header = rawHeader.trim();
+    const occurrence = (occurrences.get(header) ?? 0) + 1;
+    occurrences.set(header, occurrence);
+    return occurrence === 1 ? header : `${header}__column_${occurrence}`;
+  });
+}
+
+async function decodeDelimitedFile(file: File): Promise<string> {
+  const bytes = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    try {
+      return new TextDecoder("windows-1258").decode(bytes);
+    } catch {
+      return new TextDecoder("windows-1252").decode(bytes);
+    }
+  }
+}
+
 async function readRosterFile(file: File) {
   if (file.size > 5 * 1024 * 1024) {
     throw new Error("File import vượt quá 5 MB.");
@@ -73,17 +107,18 @@ async function readRosterFile(file: File) {
   if (file.name.toLocaleLowerCase().endsWith(".xlsx")) {
     const [sheet] = await readXlsxFile(file);
     const [headerRow = [], ...dataRows] = sheet?.data ?? [];
-    const headers = headerRow.map((value) => String(value ?? ""));
+    const headers = makeUniqueHeaders(headerRow.map((value) => String(value ?? "")));
     return {
       headers,
       rows: dataRows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]))),
     };
   }
 
-  const text = await file.text();
+  const text = await decodeDelimitedFile(file);
   const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
   const delimiter = firstLine.includes("\t") ? "\t" : firstLine.includes(";") ? ";" : ",";
-  const [headers = [], ...dataRows] = parseDelimitedText(text, delimiter);
+  const [rawHeaders = [], ...dataRows] = parseDelimitedText(text, delimiter);
+  const headers = makeUniqueHeaders(rawHeaders);
   return {
     headers,
     rows: dataRows.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]))),
